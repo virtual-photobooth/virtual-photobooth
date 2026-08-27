@@ -41,7 +41,13 @@ export default function LoginPage() {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Gagal masuk. Silakan periksa kembali email dan kata sandi Anda.');
+      let msg = err.message || 'Gagal masuk. Silakan periksa kembali email dan kata sandi Anda.';
+      if (msg.includes('Load failed') || msg.includes('Failed to fetch')) {
+        msg = 'Koneksi ke Supabase gagal. Silakan periksa jaringan internet atau pastikan URL & Key Supabase di .env.local / Vercel sudah benar.';
+      } else if (msg.includes('Invalid login credentials')) {
+        msg = 'Email atau Kata Sandi salah. Silakan periksa kembali.';
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
