@@ -25,6 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const supabase = createClient();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
     async function getUser() {
@@ -33,10 +34,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       } = await supabase.auth.getUser();
       if (user) {
         setUserEmail(user.email || 'Owner');
+        setCheckingAuth(false);
+      } else {
+        router.push('/login');
       }
     }
     getUser();
-  }, [supabase]);
+  }, [supabase, router]);
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-[#142420] text-emerald-200 flex flex-col items-center justify-center p-8 text-xs font-semibold gap-3">
+        <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+        <span>Memverifikasi Akses Login Owner...</span>
+      </div>
+    );
+  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
