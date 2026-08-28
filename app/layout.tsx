@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://virtual-photobooth-taupe.vercel.app"),
   icons: {
     icon: [
-      { url: "/icon.png", type: "image/png" },
+      { url: "/icon.png", type: "image/jpeg" },
     ],
     shortcut: "/icon.png",
     apple: "/apple-icon.png",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Virtual Photobooth Minimal Aesthetic Experience",
+        alt: "Virtual Photobooth Official Logo",
       },
     ],
     locale: "id_ID",
