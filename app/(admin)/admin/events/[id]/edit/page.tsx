@@ -68,25 +68,11 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         setEvent(eventData as Event);
         if (clientsData) setClients(clientsData);
 
-        let metaMonogram = eventData.monogram;
-        let metaSubtitle = eventData.subtitle;
-
-        if (typeof window !== 'undefined') {
-          const storedMeta = localStorage.getItem(`event_meta_${eventId}`);
-          if (storedMeta) {
-            try {
-              const parsed = JSON.parse(storedMeta);
-              if (parsed.monogram !== undefined) metaMonogram = parsed.monogram;
-              if (parsed.subtitle !== undefined) metaSubtitle = parsed.subtitle;
-            } catch (e) {}
-          }
-        }
-
         setFormData({
           client_id: eventData.client_id || '',
           name: eventData.name || '',
-          monogram: metaMonogram !== undefined && metaMonogram !== null ? metaMonogram : (eventData.monogram || ''),
-          subtitle: metaSubtitle !== undefined && metaSubtitle !== null ? metaSubtitle : (eventData.subtitle || ''),
+          monogram: eventData.monogram || '',
+          subtitle: eventData.subtitle || '',
           slug: eventData.slug || '',
           event_date: eventData.event_date || '',
           status: eventData.status || 'draft',
@@ -252,17 +238,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     e.preventDefault();
     setSaving(true);
     setMessage(null);
-
-    // Save metadata immediately to localStorage guaranteed
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(
-        `event_meta_${eventId}`,
-        JSON.stringify({
-          monogram: formData.monogram,
-          subtitle: formData.subtitle,
-        })
-      );
-    }
 
     try {
       const coverStoragePath = `events/${eventId}/cover/cover.jpg`;
