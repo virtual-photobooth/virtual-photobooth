@@ -58,47 +58,49 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
   let slots: Array<{ x: number; y: number; w: number; h: number }> = [];
 
   if (frameImg) {
-    // FULL-BLEED SLOT MATH: Photos bleed 100% behind transparent windows of the PNG frame.
-    // The PNG frame sitting ON TOP at (0, 0) acts as the natural stencil mask for rounded corners, borders & text!
+    // Auto-detect top & bottom frame border paddings from PNG alpha transparency
+    const { topPad, bottomPad } = detectFramePaddings(frameImg, canvasWidth, canvasHeight);
+
     if (photoCount === 2) {
-      // 2-Photo Seamless Mid-Bar Dividing Boundary (y: 1620):
-      // Slot 1 covers y: 0 to 1620; Slot 2 covers y: 1620 to 3240.
-      // The boundary line y=1620 sits 100% hidden behind the solid blue middle bar under "Anniversary 14".
-      // Photos fill 100% of their cutout windows with ZERO white gaps AND ZERO visible photo edges poking out!
+      // 2-Photo Cutout Alignment:
+      // Slot 1: Starts at topPad (below top frame border) to y=1620 (hidden behind middle blue banner)
+      // Slot 2: Starts at y=1620 to canvasHeight - bottomPad (above bottom frame border)
+      const slot1H = 1620 - topPad;
+      const slot2H = 1620 - bottomPad;
       slots = [
-        { x: 0, y: 0, w: canvasWidth, h: 1620 },
-        { x: 0, y: 1620, w: canvasWidth, h: 1620 },
+        { x: 0, y: topPad, w: canvasWidth, h: slot1H },
+        { x: 0, y: 1620, w: canvasWidth, h: slot2H },
       ];
     } else if (photoCount === 3) {
-      // 3-Photo Seamless Strip Boundaries
-      const h3 = canvasHeight / 3;
+      const availableH = canvasHeight - topPad - bottomPad;
+      const h3 = availableH / 3;
       slots = [
-        { x: 0, y: 0, w: canvasWidth, h: h3 },
-        { x: 0, y: h3, w: canvasWidth, h: h3 },
-        { x: 0, y: h3 * 2, w: canvasWidth, h: h3 },
+        { x: 0, y: topPad, w: canvasWidth, h: h3 },
+        { x: 0, y: topPad + h3, w: canvasWidth, h: h3 },
+        { x: 0, y: topPad + h3 * 2, w: canvasWidth, h: h3 },
       ];
     } else if (photoCount === 4) {
-      // 4-Photo Seamless Grid Boundaries
       const w2 = canvasWidth / 2;
-      const h2 = canvasHeight / 2;
+      const availableH = canvasHeight - topPad - bottomPad;
+      const h2 = availableH / 2;
       slots = [
-        { x: 0, y: 0, w: w2, h: h2 },
-        { x: w2, y: 0, w: w2, h: h2 },
-        { x: 0, y: h2, w: w2, h: h2 },
-        { x: w2, y: h2, w: w2, h: h2 },
+        { x: 0, y: topPad, w: w2, h: h2 },
+        { x: w2, y: topPad, w: w2, h: h2 },
+        { x: 0, y: topPad + h2, w: w2, h: h2 },
+        { x: w2, y: topPad + h2, w: w2, h: h2 },
       ];
     } else {
-      // Default N-Photo Full Bleed
       const cols = photoCount > 2 ? 2 : 1;
       const rows = Math.ceil(photoCount / cols);
       const cellW = canvasWidth / cols;
-      const cellH = canvasHeight / rows;
+      const availableH = canvasHeight - topPad - bottomPad;
+      const cellH = availableH / rows;
       for (let i = 0; i < photoCount; i++) {
         const r = Math.floor(i / cols);
         const c = i % cols;
         slots.push({
           x: c * cellW,
-          y: r * cellH,
+          y: topPad + r * cellH,
           w: cellW,
           h: cellH,
         });
@@ -307,4 +309,57 @@ function detectCutoutWindows(
     console.warn('Auto cutout detection skipped:', e);
   }
   return null;
+}
+
+function detectFramePaddings(
+  frameImg: HTMLImageElement,
+  canvasWidth: number,
+  canvasHeight: number
+): { topPad: number; bottomPad: number } {
+  let topPad = 140;
+  let bottomPad = 140;
+
+  try {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvasWidth;
+    tempCanvas.height = canvasHeight;
+    const ctx = tempCanvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
+      const imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+      const data = imgData.data;
+
+      // Find first transparent row from top
+      for (let y = 0; y < Math.floor(canvasHeight / 4); y++) {
+        let transparentCount = 0;
+        const centerX = Math.floor(canvasWidth / 2);
+        for (let x = centerX - 200; x <= centerX + 200; x += 20) {
+          const alpha = data[(y * canvasWidth + x) * 4 + 3];
+          if (alpha < 100) transparentCount++;
+        }
+        if (transparentCount > 5) {
+          topPad = Math.max(y, 140);
+          break;
+        }
+      }
+
+      // Find first transparent row from bottom
+      for (let y = canvasHeight - 1; y > Math.floor((canvasHeight * 3) / 4); y--) {
+        let transparentCount = 0;
+        const centerX = Math.floor(canvasWidth / 2);
+        for (let x = centerX - 200; x <= centerX + 200; x += 20) {
+          const alpha = data[(y * canvasWidth + x) * 4 + 3];
+          if (alpha < 100) transparentCount++;
+        }
+        if (transparentCount > 5) {
+          bottomPad = Math.max(canvasHeight - y, 140);
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Frame padding detection fallback:', e);
+  }
+
+  return { topPad, bottomPad };
 }
