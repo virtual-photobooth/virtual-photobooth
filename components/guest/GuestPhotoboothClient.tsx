@@ -343,10 +343,15 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
 
   const [recordedMimeType, setRecordedMimeType] = useState<string>('audio/mp4');
 
+  const latestVoiceBlobRef = useRef<Blob | null>(null);
+
   // Voice Note Recording Handlers with Cross-Platform iOS Safari Compatibility
   const startVoiceRecording = async () => {
     try {
       audioChunksRef.current = [];
+      latestVoiceBlobRef.current = null;
+      setVoiceBlob(null);
+      setVoiceAudioUrl(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       // Detect supported MIME type (iOS Safari requires audio/mp4 or audio/aac)
@@ -377,6 +382,7 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
 
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
+        latestVoiceBlobRef.current = audioBlob;
         setVoiceBlob(audioBlob);
         const url = URL.createObjectURL(audioBlob);
         setVoiceAudioUrl(url);
@@ -403,7 +409,11 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
 
   const stopVoiceRecording = () => {
     if (mediaRecorderRef.current && recordingVoice) {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {
+        console.warn('Error stopping media recorder:', e);
+      }
       setRecordingVoice(false);
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -442,14 +452,22 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
   const handleSubmitGuestbook = async () => {
     if (!event) return;
     setUploadingVoice(true);
+
+    if (recordingVoice) {
+      stopVoiceRecording();
+      await new Promise((r) => setTimeout(r, 300));
+    }
+
     try {
       let voiceBase64: string | null = null;
-      if (voiceBlob) {
+      const targetBlob = voiceBlob || latestVoiceBlobRef.current;
+
+      if (targetBlob) {
         voiceBase64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.onerror = reject;
-          reader.readAsDataURL(voiceBlob);
+          reader.readAsDataURL(targetBlob);
         });
       }
 
