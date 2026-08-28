@@ -443,57 +443,34 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
     if (!event) return;
     setUploadingVoice(true);
     try {
-      let photoStorageUrl: string | null = null;
-      let voiceStorageUrl: string | null = null;
-
-      // 1. Upload Composited Image to Supabase Storage
-      if (compositedImage) {
-        const blob = await (await fetch(compositedImage)).blob();
-        const photoPath = `events/${event.id}/photos/photo_${Date.now()}_${Math.random()
-          .toString(36)
-          .substring(7)}.jpg`;
-
-        const { error: uploadPhotoErr } = await supabase.storage
-          .from('virtual-photobooth')
-          .upload(photoPath, blob, { contentType: 'image/jpeg' });
-
-        if (!uploadPhotoErr) {
-          const { data: pUrlData } = supabase.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(photoPath);
-          photoStorageUrl = pUrlData?.publicUrl || null;
-        }
-      }
-
-      // 2. Upload Voice Audio to Supabase Storage with dynamic MIME extension
+      let voiceBase64: string | null = null;
       if (voiceBlob) {
-        const isMp4 = recordedMimeType.includes('mp4') || recordedMimeType.includes('aac');
-        const ext = isMp4 ? 'm4a' : 'webm';
-        const voicePath = `events/${event.id}/voices/voice_${Date.now()}_${Math.random()
-          .toString(36)
-          .substring(7)}.${ext}`;
-
-        const { error: uploadVoiceErr } = await supabase.storage
-          .from('virtual-photobooth')
-          .upload(voicePath, voiceBlob, { contentType: recordedMimeType || 'audio/mp4' });
-
-        if (!uploadVoiceErr) {
-          const { data: vUrlData } = supabase.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(voicePath);
-          voiceStorageUrl = vUrlData?.publicUrl || null;
-        }
+        voiceBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(voiceBlob);
+        });
       }
 
-      // 3. Save Guestbook Record to Database
-      await (supabase.from('guests') as any).insert({
-        event_id: event.id,
-        guest_name: guestName.trim() || 'Tamu Istimewa',
-        note: guestNote.trim() || null,
-        photo_url: photoStorageUrl,
-        voice_url: voiceStorageUrl,
-        recording_duration: recordingTime > 0 ? recordingTime : null,
+      const res = await fetch('/api/guest/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: event.id,
+          guestName: guestName.trim() || 'Tamu Istimewa',
+          wishes: guestNote.trim() || null,
+          photoBase64: compositedImage || null,
+          voiceBase64: voiceBase64,
+          voiceMimeType: recordedMimeType,
+          durationSeconds: recordingTime > 0 ? recordingTime : 0,
+        }),
       });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        console.warn('Guestbook submit warn:', resData?.message);
+      }
 
       setStep(6); // Go to Thank You Step
     } catch (err) {
