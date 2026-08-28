@@ -64,14 +64,15 @@ export async function POST(request: Request) {
 
         if (!uploadPhotoErr) {
           photoPath = filename;
-          await (supabaseAdmin.from('photos') as any).insert({
-            event_id: eventId,
-            guest_id: guestId,
-            final_photo_path: filename,
-          });
         } else {
           console.error('Upload photo storage error:', uploadPhotoErr);
         }
+
+        await (supabaseAdmin.from('photos') as any).insert({
+          event_id: eventId,
+          guest_id: guestId,
+          final_photo_path: photoPath || filename,
+        });
       } catch (pErr) {
         console.error('Photo processing error:', pErr);
       }
@@ -83,29 +84,33 @@ export async function POST(request: Request) {
         const rawVoiceStr = String(voiceBase64);
         const base64Audio = rawVoiceStr.includes(',') ? rawVoiceStr.split(',')[1] : rawVoiceStr;
         const audioBuffer = Buffer.from(base64Audio, 'base64');
-        const mime = voiceMimeType || 'audio/webm';
-        const isMp4 = mime.includes('mp4') || mime.includes('aac') || mime.includes('m4a');
+
+        // Clean MIME type to standard audio format (strip codec parameters like ;codecs=opus)
+        const rawMime = (voiceMimeType || 'audio/webm').toLowerCase();
+        const cleanMime = rawMime.split(';')[0].trim() || 'audio/webm';
+        const isMp4 = cleanMime.includes('mp4') || cleanMime.includes('aac') || cleanMime.includes('m4a');
         const ext = isMp4 ? 'm4a' : 'webm';
         const filename = `events/${eventId}/voices/voice_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
 
         const { error: uploadVoiceErr } = await supabaseAdmin.storage
           .from('virtual-photobooth')
-          .upload(filename, audioBuffer, { contentType: mime, upsert: true });
+          .upload(filename, audioBuffer, { contentType: cleanMime, upsert: true });
 
-        if (!uploadVoiceErr) {
-          voicePath = filename;
-          const { error: insertVoiceErr } = await (supabaseAdmin.from('voice_messages') as any).insert({
-            event_id: eventId,
-            guest_id: guestId,
-            audio_path: filename,
-            duration_seconds: durationSeconds ? Number(durationSeconds) : 5,
-          });
-
-          if (insertVoiceErr) {
-            console.error('Insert voice message DB error:', insertVoiceErr);
-          }
+        if (uploadVoiceErr) {
+          console.error('Upload voice storage error:', uploadVoiceErr.message);
         } else {
-          console.error('Upload voice storage error:', uploadVoiceErr);
+          voicePath = filename;
+        }
+
+        const { error: insertVoiceErr } = await (supabaseAdmin.from('voice_messages') as any).insert({
+          event_id: eventId,
+          guest_id: guestId,
+          audio_path: voicePath || filename,
+          duration_seconds: durationSeconds ? Number(durationSeconds) : 5,
+        });
+
+        if (insertVoiceErr) {
+          console.error('Insert voice message DB error:', insertVoiceErr.message);
         }
       } catch (vErr) {
         console.error('Voice processing error:', vErr);
