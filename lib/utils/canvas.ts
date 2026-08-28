@@ -61,26 +61,27 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     // FULL-BLEED SLOT MATH: Photos bleed 100% behind transparent windows of the PNG frame.
     // The PNG frame sitting ON TOP at (0, 0) acts as the natural stencil mask for rounded corners, borders & text!
     if (photoCount === 2) {
-      // 2-Photo Precision Slot Bounds: Top photo y: 240 to 1360; Bottom photo y: 1660 to 2900.
-      // Photos fill their exact cutout windows without bleeding past the middle "Anniversary 14" text bar!
+      // 2-Photo 100% Total Canvas Height Coverage:
+      // Photo 1 covers y: 0 to 1750. Photo 2 covers y: 1490 to 3240.
+      // Total coverage is 100% from top (y: 0) to bottom (y: 3240), eliminating 100% of white gaps or background strips!
       slots = [
-        { x: 80, y: 240, w: canvasWidth - 160, h: 1120 },
-        { x: 80, y: 1660, w: canvasWidth - 160, h: 1240 },
+        { x: 0, y: 0, w: canvasWidth, h: 1750 },
+        { x: 0, y: 1490, w: canvasWidth, h: 1750 },
       ];
     } else if (photoCount === 3) {
-      // 3-Photo Precision Strip
+      // 3-Photo 100% Total Canvas Height Coverage
       slots = [
-        { x: 100, y: 260, w: canvasWidth - 200, h: 780 },
-        { x: 100, y: 1100, w: canvasWidth - 200, h: 780 },
-        { x: 100, y: 1940, w: canvasWidth - 200, h: 780 },
+        { x: 0, y: 0, w: canvasWidth, h: 1200 },
+        { x: 0, y: 1000, w: canvasWidth, h: 1240 },
+        { x: 0, y: 2040, w: canvasWidth, h: 1200 },
       ];
     } else if (photoCount === 4) {
-      // 4-Photo Precision Grid
+      // 4-Photo 100% Total Canvas Height Coverage
       slots = [
-        { x: 100, y: 320, w: 930, h: 1150 },
-        { x: 1130, y: 320, w: 930, h: 1150 },
-        { x: 100, y: 1530, w: 930, h: 1150 },
-        { x: 1130, y: 1530, w: 930, h: 1150 },
+        { x: 0, y: 0, w: 1140, h: 1750 },
+        { x: 1020, y: 0, w: 1140, h: 1750 },
+        { x: 0, y: 1490, w: 1140, h: 1750 },
+        { x: 1020, y: 1490, w: 1140, h: 1750 },
       ];
     } else {
       // Default N-Photo Full Bleed

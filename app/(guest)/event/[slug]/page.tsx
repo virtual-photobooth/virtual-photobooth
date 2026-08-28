@@ -151,7 +151,7 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
             .getPublicUrl(data.frame_path);
 
           if (publicUrlData?.publicUrl) {
-            setFramePublicUrl(publicUrlData.publicUrl);
+            setFramePublicUrl(`${publicUrlData.publicUrl}?t=${Date.now()}`);
           }
         }
 
