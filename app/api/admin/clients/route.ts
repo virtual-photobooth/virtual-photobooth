@@ -70,8 +70,8 @@ export async function POST(request: Request) {
 
       if (error) throw error;
 
-      // Sync to Supabase Auth & public.profiles
-      if (email && generatedPass) {
+      // Sync to Supabase Auth & public.profiles (only if SUPABASE_SERVICE_ROLE_KEY is provided)
+      if (process.env.SUPABASE_SERVICE_ROLE_KEY && email && generatedPass) {
         try {
           await supabaseAdmin.auth.admin.createUser({
             email: email,
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
             user_metadata: { full_name: name, role: 'client' },
           });
         } catch (authCreateErr: any) {
-          // Ignore duplicate auth user error
+          console.warn('Auth user creation warning:', authCreateErr?.message);
         }
       }
 
