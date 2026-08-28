@@ -44,32 +44,25 @@ export default function LoginPage() {
         return;
       }
 
-      // 2. Check if email exists in `clients` table
-      const { data: clientRecord } = await (supabase.from('clients') as any)
-        .select('id, contact_email, name')
-        .ilike('contact_email', normalizedEmail)
-        .maybeSingle();
+      // 2. Call server-side Client Login API
+      const res = await fetch('/api/auth/client-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail, password }),
+      });
 
-      if (clientRecord || normalizedEmail.includes('client') || normalizedEmail.includes('admin')) {
-        const sessionData = {
-          email: normalizedEmail,
-          loggedInAt: Date.now(),
-        };
+      const resData = await res.json();
+
+      if (res.ok && resData.success) {
         if (typeof window !== 'undefined') {
-          localStorage.setItem('client_session', JSON.stringify(sessionData));
+          localStorage.setItem('client_session', JSON.stringify({ email: normalizedEmail, loggedInAt: Date.now() }));
           document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
         }
-
-        if (normalizedEmail.includes('admin') || normalizedEmail === 'teddyaditya69@gmail.com') {
-          window.location.href = '/admin';
-        } else {
-          window.location.href = '/client';
-        }
+        window.location.href = resData.redirect || '/client';
         return;
       }
 
-      // 3. If email is not registered as owner or client
-      setError('Akun tidak terdaftar di database. Silakan minta Email & Password Client resmi dari Admin.');
+      setError(resData.message || 'Akun tidak terdaftar di database. Silakan minta Email & Password Client resmi dari Admin.');
     } catch (err: any) {
       console.error('Login error:', err);
       setError('Gagal memproses login. Silakan periksa kembali email & password Anda.');
