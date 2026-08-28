@@ -58,15 +58,18 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       try {
         setLoading(true);
 
-        const [{ data: eventData, error: eventErr }, { data: clientsData }] = await Promise.all([
-          (supabase.from('events') as any).select('*').eq('id', eventId).single(),
-          supabase.from('clients').select('*').order('name', { ascending: true }),
-        ]);
+        const { data: eventData, error: eventErr } = await (supabase.from('events') as any)
+          .select('*')
+          .eq('id', eventId)
+          .single();
+
+        const clientsRes = await fetch('/api/admin/clients');
+        const clientsData = await clientsRes.json();
 
         if (eventErr || !eventData) throw eventErr || new Error('Event not found');
 
         setEvent(eventData as Event);
-        if (clientsData) setClients(clientsData);
+        if (clientsData?.clients) setClients(clientsData.clients);
 
         setFormData({
           client_id: eventData.client_id || '',

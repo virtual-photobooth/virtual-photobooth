@@ -39,15 +39,12 @@ export default function CreateEventPage() {
   async function loadClients() {
     try {
       setLoadingClients(true);
-      const { data, error } = await (supabase.from('clients') as any)
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      if (data) {
-        setClients(data);
-        if (data.length > 0) {
-          setFormData((prev) => ({ ...prev, client_id: data[0].id }));
+      const res = await fetch('/api/admin/clients');
+      const data = await res.json();
+      if (data?.clients) {
+        setClients(data.clients);
+        if (data.clients.length > 0) {
+          setFormData((prev) => ({ ...prev, client_id: data.clients[0].id }));
         }
       }
     } catch (err) {
@@ -63,22 +60,19 @@ export default function CreateEventPage() {
     setError(null);
     try {
       const defaultName = formData.name ? `${formData.name} Host` : 'Default Event Host';
-      const creds = await generateUniqueClientCredentials(supabase, defaultName);
+      const res = await fetch('/api/admin/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: defaultName }),
+      });
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.message || 'Failed to create quick client host');
+      }
 
-      const { data: newClient, error: insertErr } = await (supabase.from('clients') as any)
-        .insert({
-          name: defaultName,
-          contact_email: creds.email,
-          notes: `Password: ${creds.password} | Auto-created client host`,
-        })
-        .select()
-        .single();
-
-      if (insertErr) throw insertErr;
-
-      if (newClient) {
-        setClients((prev) => [newClient, ...prev]);
-        setFormData((prev) => ({ ...prev, client_id: newClient.id }));
+      if (resData.client) {
+        setClients((prev) => [resData.client, ...prev]);
+        setFormData((prev) => ({ ...prev, client_id: resData.client.id }));
       }
     } catch (err: any) {
       setError(err.message || 'Failed to create quick client host');
@@ -103,19 +97,16 @@ export default function CreateEventPage() {
       // Auto-create a client with unique credentials if none exists
       if (!targetClientId) {
         const defaultName = formData.name ? `${formData.name} Host` : 'Default Event Host';
-        const creds = await generateUniqueClientCredentials(supabase, defaultName);
-
-        const { data: autoClient, error: autoErr } = await (supabase.from('clients') as any)
-          .insert({
-            name: defaultName,
-            contact_email: creds.email,
-            notes: `Password: ${creds.password} | Auto-created during event creation`,
-          })
-          .select()
-          .single();
-
-        if (autoErr) throw autoErr;
-        targetClientId = autoClient.id;
+        const res = await fetch('/api/admin/clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: defaultName }),
+        });
+        const resData = await res.json();
+        if (!res.ok || !resData.success) {
+          throw new Error(resData.message || 'Failed to auto-create client host');
+        }
+        targetClientId = resData.client.id;
       }
 
       // Check slug uniqueness
