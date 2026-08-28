@@ -38,12 +38,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [qrModalOpen, setQrModalOpen] = useState(false);
 
+  const clientEmail = event?.client?.contact_email || `${(event?.slug || 'client').toLowerCase()}@photobooth.com`;
+  const clientPassword =
+    event?.client?.notes?.match(/Password:\s*([^\s|]+)/)?.[1] ||
+    `VP-${(event?.client?.name || event?.name || 'HOST').replace(/[^a-zA-Z0-9]/g, '').substring(0, 6).toUpperCase()}-1234`;
+
   const handleCopyCredentials = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-    const email = event?.client?.contact_email || 'client@photobooth.com';
+    const email = clientEmail;
+    const password = clientPassword;
     const clientName = event?.client?.name || event?.name || 'Client';
 
-    const text = `Halo Kak ${clientName},\n\nBerikut adalah akses login ke Portal Virtual Photobooth Acara Anda:\n\n🌐 Link Login: ${origin}/login\n📧 Email Login: ${email}\n🔑 Password Default: client123\n\nMelalui portal ini, Anda dapat melihat/mengunduh semua foto kenangan tamu dan mendengarkan rekaman suara ucapan tamu. Terima kasih!`;
+    const text = `Halo Kak ${clientName},\n\nBerikut adalah akses login ke Portal Virtual Photobooth Acara Anda:\n\n🌐 Link Login: ${origin}/login\n📧 Email Login: ${email}\n🔑 Password Login: ${password}\n\nMelalui portal ini, Anda dapat melihat/mengunduh semua foto kenangan tamu dan mendengarkan rekaman suara ucapan tamu. Terima kasih!`;
 
     navigator.clipboard.writeText(text);
     setCopiedCreds(true);
@@ -103,7 +109,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       try {
         setLoading(true);
         const { data, error } = await (supabase.from('events') as any)
-          .select('*, client:clients(name)')
+          .select('*, client:clients(id, name, contact_email, notes)')
           .eq('id', eventId)
           .single();
 
@@ -303,8 +309,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <div className="text-xs text-slate-600 space-y-1 bg-white p-3 rounded-xl border border-emerald-100 font-mono">
               <div><strong>Halaman Login:</strong> {typeof window !== 'undefined' ? `${window.location.origin}/login` : 'http://localhost:3000/login'}</div>
               <div><strong>Client Host:</strong> {event.client?.name || 'Unassigned'}</div>
-              <div><strong>Email Login:</strong> {event.client?.contact_email || 'client@photobooth.com'}</div>
-              <div><strong>Password Default:</strong> <code className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold">client123</code></div>
+              <div><strong>Email Login:</strong> <span className="font-bold text-[#1A2621]">{clientEmail}</span></div>
+              <div><strong>Password Login:</strong> <code className="bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold">{clientPassword}</code></div>
             </div>
 
             <button
