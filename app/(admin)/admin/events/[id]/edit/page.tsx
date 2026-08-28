@@ -269,12 +269,12 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         setFramePreviewUrl(`${supabase.storage.from('virtual-photobooth').getPublicUrl(frameStoragePath).data.publicUrl}?t=${Date.now()}`);
       }
 
-      // 3. Update database record with frame_path & cover_path
-      const fullPayload: any = {
+      // 3. Update database record with monogram, subtitle, frame_path & cover_path
+      const updatePayload: any = {
         client_id: formData.client_id,
         name: formData.name,
-        monogram: formData.monogram,
-        subtitle: formData.subtitle,
+        monogram: formData.monogram || '',
+        subtitle: formData.subtitle || '',
         slug: formData.slug,
         event_date: formData.event_date,
         status: formData.status,
@@ -286,33 +286,34 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         cover_path: coverStoragePath,
       };
 
-      let { error } = await (supabase.from('events') as any)
-        .update(fullPayload)
+      let { error: updateErr } = await (supabase.from('events') as any)
+        .update(updatePayload)
         .eq('id', eventId);
 
-      if (error) {
-        // Fallback: strip optional columns if DB schema cache has not added them
-        const safePayload: any = {
-          client_id: formData.client_id,
-          name: formData.name,
-          slug: formData.slug,
-          event_date: formData.event_date,
-          status: formData.status,
-          photo_count: Number(formData.photo_count),
-          countdown_seconds: Number(formData.countdown_seconds),
-          is_voice_enabled: formData.is_voice_enabled,
-          voice_retention_days: Number(formData.voice_retention_days),
-          frame_path: frameStoragePath,
-        };
+      if (updateErr) {
+        // Retry payload without optional storage paths if columns are missing
+        const retryPayload: any = { ...updatePayload };
+        delete retryPayload.cover_path;
 
-        const { error: safeErr } = await (supabase.from('events') as any)
-          .update(safePayload)
+        const { error: retryErr } = await (supabase.from('events') as any)
+          .update(retryPayload)
           .eq('id', eventId);
 
-        if (safeErr) throw safeErr;
+        if (retryErr) throw retryErr;
       }
 
-      setMessage({ type: 'success', text: 'Perubahan event (Bingkai PNG, Subtitle, Monogram, Foto Cover) berhasil disimpan & disinkronkan!' });
+      // Update local event state immediately
+      setEvent((prev) =>
+        prev
+          ? {
+              ...prev,
+              monogram: formData.monogram || '',
+              subtitle: formData.subtitle || '',
+            }
+          : prev
+      );
+
+      setMessage({ type: 'success', text: 'Perubahan event (Monogram, Subtitle, Bingkai PNG) berhasil disimpan ke Database!' });
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Failed to update event' });
     } finally {
