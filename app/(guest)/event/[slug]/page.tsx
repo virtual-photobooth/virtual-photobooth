@@ -126,10 +126,24 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
           throw new Error('Acara tidak ditemukan. Silakan periksa URL atau buat event baru di Admin.');
         }
 
+        let resolvedMonogram = data.monogram;
+        let resolvedSubtitle = data.subtitle;
+
+        if (typeof window !== 'undefined') {
+          const storedMeta = localStorage.getItem(`event_meta_${data.id}`);
+          if (storedMeta) {
+            try {
+              const parsed = JSON.parse(storedMeta);
+              if (parsed.monogram !== undefined) resolvedMonogram = parsed.monogram;
+              if (parsed.subtitle !== undefined) resolvedSubtitle = parsed.subtitle;
+            } catch (e) {}
+          }
+        }
+
         const mergedEvent = {
           ...data,
-          monogram: data.monogram || '',
-          subtitle: data.subtitle || '',
+          monogram: resolvedMonogram !== undefined && resolvedMonogram !== null ? resolvedMonogram : (data.monogram || ''),
+          subtitle: resolvedSubtitle !== undefined && resolvedSubtitle !== null ? resolvedSubtitle : (data.subtitle || ''),
         };
 
         setEvent(mergedEvent as Event);

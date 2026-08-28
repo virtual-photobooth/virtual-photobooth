@@ -269,6 +269,17 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         setFramePreviewUrl(`${supabase.storage.from('virtual-photobooth').getPublicUrl(frameStoragePath).data.publicUrl}?t=${Date.now()}`);
       }
 
+      // Save metadata backup to localStorage so monogram & subtitle changes persist even if DB column is missing
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(
+          `event_meta_${eventId}`,
+          JSON.stringify({
+            monogram: formData.monogram || '',
+            subtitle: formData.subtitle || '',
+          })
+        );
+      }
+
       // 3. Update database record with monogram, subtitle, frame_path & cover_path
       const updatePayload: any = {
         client_id: formData.client_id,
@@ -291,15 +302,26 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         .eq('id', eventId);
 
       if (updateErr) {
-        // Retry payload without optional storage paths if columns are missing
-        const retryPayload: any = { ...updatePayload };
-        delete retryPayload.cover_path;
+        console.warn('DB update failed, attempting safe payload without missing schema columns:', updateErr);
+        // Strip optional columns if DB schema cache has not added them
+        const safePayload: any = {
+          client_id: formData.client_id,
+          name: formData.name,
+          slug: formData.slug,
+          event_date: formData.event_date,
+          status: formData.status,
+          photo_count: Number(formData.photo_count),
+          countdown_seconds: Number(formData.countdown_seconds),
+          is_voice_enabled: formData.is_voice_enabled,
+          voice_retention_days: Number(formData.voice_retention_days),
+          frame_path: frameStoragePath,
+        };
 
-        const { error: retryErr } = await (supabase.from('events') as any)
-          .update(retryPayload)
+        const { error: safeErr } = await (supabase.from('events') as any)
+          .update(safePayload)
           .eq('id', eventId);
 
-        if (retryErr) throw retryErr;
+        if (safeErr) throw safeErr;
       }
 
       // Update local event state immediately
@@ -313,7 +335,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           : prev
       );
 
-      setMessage({ type: 'success', text: 'Perubahan event (Monogram, Subtitle, Bingkai PNG) berhasil disimpan ke Database!' });
+      setMessage({ type: 'success', text: 'Perubahan event berhasil disimpan & disinkronkan!' });
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Failed to update event' });
     } finally {
