@@ -411,36 +411,73 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
     }
   };
 
+  // Helper to find supported audio MIME type across iOS Safari and Android Chrome
+  const getSupportedAudioMimeType = () => {
+    const mimeTypes = [
+      'audio/mp4',
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/aac',
+      'audio/ogg',
+      'audio/wav',
+    ];
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+      for (const type of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          return type;
+        }
+      }
+    }
+    return '';
+  };
+
   // Start Audio Recording (Step 5)
   const handleStartRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
       audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorder(stream);
+      const mimeType = getSupportedAudioMimeType();
+      const options = mimeType ? { mimeType } : undefined;
+
+      const mediaRecorder = new MediaRecorder(stream, options);
 
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
+        if (e.data && e.data.size > 0) {
           audioChunksRef.current.push(e.data);
         }
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const actualType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: actualType });
         setAudioBlob(blob);
-        setAudioUrl(URL.createObjectURL(blob));
+
+        if (audioUrl) URL.revokeObjectURL(audioUrl);
+        const newUrl = URL.createObjectURL(blob);
+        setAudioUrl(newUrl);
+
         stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+      mediaRecorder.start(250); // Slice audio data every 250ms
       setIsRecording(true);
       setRecordSeconds(0);
 
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = setInterval(() => {
         setRecordSeconds((prev) => prev + 1);
       }, 1000);
-    } catch (err) {
-      alert('Microphone permission is required to record a voice message.');
+    } catch (err: any) {
+      console.error('Audio recording error:', err);
+      alert('Izin mikrofon diperlukan untuk merekam pesan suara.');
     }
   };
 
@@ -466,24 +503,24 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
 
     try {
       const voiceId = crypto.randomUUID();
-      const storagePath = `events/${event.id}/voices/${voiceId}.webm`;
+      const isMp4 = audioBlob.type.includes('mp4') || audioBlob.type.includes('aac');
+      const ext = isMp4 ? 'mp4' : 'webm';
+      const storagePath = `events/${event.id}/voices/${voiceId}.${ext}`;
 
-      // 1. Upload audio to storage
+      // Upload audio blob to Supabase storage
       const { error: uploadErr } = await supabase.storage
         .from('virtual-photobooth')
         .upload(storagePath, audioBlob, {
-          contentType: 'audio/webm',
+          contentType: audioBlob.type || 'audio/webm',
           upsert: true,
         });
 
       if (uploadErr) throw uploadErr;
 
-      // Calculate retention expiration date
       const retentionDays = event.voice_retention_days || 7;
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + retentionDays);
 
-      // 2. Save voice record
       await (supabase.from('voice_messages') as any).insert({
         id: voiceId,
         event_id: event.id,
@@ -928,37 +965,38 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
 
             {/* Audio Preview Player */}
             {audioUrl && (
-              <div className="w-full max-w-xs mt-6 p-3 bg-[#F0EBE1] border border-[#E2D9CC] rounded-2xl flex items-center justify-between">
-                <audio ref={audioPlayerRef} src={audioUrl} onEnded={() => setIsPlayingAudio(false)} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (audioPlayerRef.current) {
-                      if (isPlayingAudio) {
+              <div className="w-full max-w-sm mt-6 p-4 bg-[#F0EBE1] border border-[#E2D9CC] rounded-2xl flex flex-col gap-3 shadow-md">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-semibold text-[#2C2A29]">Hasil Rekaman Suara</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isPlayingAudio && audioPlayerRef.current) {
                         audioPlayerRef.current.pause();
-                        setIsPlayingAudio(false);
-                      } else {
-                        audioPlayerRef.current.play().catch(() => {});
-                        setIsPlayingAudio(true);
                       }
-                    }
-                  }}
-                  className="p-2 rounded-full bg-[#8C6D46] text-white"
-                >
-                  {isPlayingAudio ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                </button>
-                <span className="text-xs font-mono text-[#78716C]">Preview Audio</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAudioBlob(null);
-                    setAudioUrl(null);
-                    setRecordSeconds(0);
-                  }}
-                  className="text-xs text-rose-600 font-medium"
-                >
-                  Record Again
-                </button>
+                      setAudioBlob(null);
+                      setAudioUrl(null);
+                      setRecordSeconds(0);
+                    }}
+                    className="text-xs text-rose-600 font-semibold hover:underline cursor-pointer"
+                  >
+                    Rekam Ulang
+                  </button>
+                </div>
+
+                <audio
+                  ref={audioPlayerRef}
+                  src={audioUrl}
+                  controls
+                  playsInline
+                  onPlay={() => setIsPlayingAudio(true)}
+                  onPause={() => setIsPlayingAudio(false)}
+                  onEnded={() => setIsPlayingAudio(false)}
+                  className="w-full h-10 rounded-lg"
+                />
               </div>
             )}
           </div>
