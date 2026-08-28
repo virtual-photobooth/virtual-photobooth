@@ -54,21 +54,53 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     }
   }
 
-  // Calculate layout grid based on photo count with non-overlapping inset bounds
+  // Calculate layout grid based on photo count
   let slots: Array<{ x: number; y: number; w: number; h: number }> = [];
 
-  // Attempt auto-detecting transparent cutout windows from PNG frame
   if (frameImg) {
-    const autoCutouts = detectCutoutWindows(frameImg, canvasWidth, canvasHeight, photoCount);
-    if (autoCutouts && autoCutouts.length === photoCount) {
-      slots = autoCutouts;
+    // FULL-BLEED SLOT MATH: Photos bleed 100% behind transparent windows of the PNG frame.
+    // The PNG frame sitting ON TOP at (0, 0) acts as the natural stencil mask for rounded corners, borders & text!
+    if (photoCount === 2) {
+      // 2-Photo Top & Bottom Full Bleed
+      slots = [
+        { x: 0, y: 0, w: canvasWidth, h: 1680 },
+        { x: 0, y: 1560, w: canvasWidth, h: 1680 },
+      ];
+    } else if (photoCount === 3) {
+      // 3-Photo Vertical Strip Full Bleed
+      slots = [
+        { x: 0, y: 0, w: canvasWidth, h: 1140 },
+        { x: 0, y: 1050, w: canvasWidth, h: 1140 },
+        { x: 0, y: 2100, w: canvasWidth, h: 1140 },
+      ];
+    } else if (photoCount === 4) {
+      // 4-Photo 2x2 Grid Full Bleed
+      slots = [
+        { x: 0, y: 0, w: 1120, h: 1680 },
+        { x: 1040, y: 0, w: 1120, h: 1680 },
+        { x: 0, y: 1560, w: 1120, h: 1680 },
+        { x: 1040, y: 1560, w: 1120, h: 1680 },
+      ];
+    } else {
+      // Default N-Photo Full Bleed
+      const cols = photoCount > 2 ? 2 : 1;
+      const rows = Math.ceil(photoCount / cols);
+      const cellW = canvasWidth / cols;
+      const cellH = canvasHeight / rows;
+      for (let i = 0; i < photoCount; i++) {
+        const r = Math.floor(i / cols);
+        const c = i % cols;
+        slots.push({
+          x: c * cellW,
+          y: r * cellH,
+          w: cellW,
+          h: cellH,
+        });
+      }
     }
-  }
-
-  // Fallback to precision non-overlapping inset slots if auto-detect is unavailable
-  if (slots.length === 0) {
+  } else {
+    // Fallback default Editorial layout when NO custom PNG frame is uploaded
     if (photoCount === 4) {
-      // 2x2 Grid with clean margins & gap
       const paddingX = 120;
       const paddingTop = 360;
       const gap = 50;
@@ -82,7 +114,6 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
         { x: paddingX + cellW + gap, y: paddingTop + cellH + gap, w: cellW, h: cellH },
       ];
     } else if (photoCount === 3) {
-      // Vertical 3-strip with clean gaps
       const paddingX = 160;
       const paddingTop = 280;
       const gap = 50;
@@ -95,8 +126,6 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
         { x: paddingX, y: paddingTop + (cellH + gap) * 2, w: cellW, h: cellH },
       ];
     } else if (photoCount === 2) {
-      // 2-Photo Precision Inset Layout (Top & Bottom slots separated by 260px middle gap for text/logos)
-      // Top Slot: y: 260 to 1410. Middle Gap: 1410 to 1670 (reserved for "Anniversary 14"). Bottom Slot: 1670 to 2820.
       const paddingX = 140;
       const cellW = canvasWidth - paddingX * 2;
       const cellH = 1150;
@@ -106,7 +135,6 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
         { x: paddingX, y: 1670, w: cellW, h: cellH },
       ];
     } else {
-      // Default grid math for N photos
       const cols = photoCount > 2 ? 2 : 1;
       const rows = Math.ceil(photoCount / cols);
       const paddingX = 120;
