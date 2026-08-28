@@ -570,63 +570,72 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
     <div className={`flex-1 flex flex-col justify-between p-6 sm:p-8 relative overflow-hidden selection:bg-[#B8926A] selection:text-white transition-colors duration-300 ${
       flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F9F6F0]'
     }`}>
-      {/* STEP 1: WELCOME SCREEN - MATCHING IMAGE 1 DESIGN */}
+      {/* STEP 1: WELCOME SCREEN - LUXURY EDITORIAL CARD */}
       {step === 1 && (
-        <div className="flex-1 flex flex-col justify-between items-center text-center py-4 animate-fade-in">
-          {/* Top Monogram Header */}
-          <div className="pt-4 space-y-3">
-            {event.monogram && event.monogram.trim().length > 0 ? (
-              <div className="inline-flex items-center justify-center gap-2 text-[#8C6D46] font-serif italic text-2xl font-bold tracking-widest px-4 py-1">
-                <span>{event.monogram}</span>
+        <div className="flex-1 flex flex-col justify-center items-center text-center py-2 sm:py-6 animate-fade-in my-auto w-full">
+          <div className="w-full max-w-sm sm:max-w-md bg-white/90 backdrop-blur-xl rounded-[2.5rem] border border-[#E2D9CC]/90 p-5 sm:p-7 shadow-2xl flex flex-col items-center justify-between space-y-4 relative overflow-hidden">
+            {/* Soft Ambient Gold Glow Inside Card */}
+            <div className="absolute -top-12 -left-12 w-32 h-32 bg-[#D4A373]/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-[#8C6D46]/10 rounded-full blur-2xl pointer-events-none" />
+
+            {/* Top Monogram / Gold Diamond Accent */}
+            <div className="space-y-2 pt-1 z-10 w-full">
+              {event.monogram && event.monogram.trim().length > 0 ? (
+                <div className="inline-flex items-center justify-center gap-2 text-[#8C6D46] font-serif italic text-2xl font-bold tracking-widest px-4 py-0.5">
+                  <span>{event.monogram}</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center justify-center gap-2 text-[#D4A373] text-xs font-serif tracking-widest">
+                  <span className="h-[1px] w-6 bg-[#D4A373]/40 inline-block" />
+                  <span>✦</span>
+                  <span className="h-[1px] w-6 bg-[#D4A373]/40 inline-block" />
+                </div>
+              )}
+
+              {/* Event Title & Subtitle Badge */}
+              <div className="space-y-1.5 px-1">
+                <h1 className="font-serif text-2xl sm:text-3xl font-extrabold text-[#2C2A29] uppercase tracking-wider leading-snug">
+                  {event.name}
+                </h1>
+
+                <div className="flex items-center justify-center gap-2 pt-0.5 flex-wrap">
+                  {event.subtitle && event.subtitle.trim().length > 0 && (
+                    <span className="text-[10px] uppercase tracking-[0.25em] font-extrabold text-[#8C6D46] bg-[#F4EFE6] px-3 py-1 rounded-full border border-[#E2D9CC]">
+                      {event.subtitle}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-[#78716C] font-semibold font-mono bg-[#F4EFE6]/70 px-3 py-1 rounded-full border border-[#E2D9CC]/60">
+                    {event.event_date}
+                  </span>
+                </div>
               </div>
-            ) : null}
-
-            {/* Event Title & Subtitle */}
-            <div className="space-y-1">
-              <h1 className="font-serif text-3xl sm:text-4xl font-bold text-[#2C2A29] uppercase tracking-wider leading-snug px-2">
-                {event.name}
-              </h1>
-              {event.subtitle && event.subtitle.trim().length > 0 ? (
-                <p className="text-xs uppercase tracking-[0.3em] font-semibold text-[#8C6D46]">
-                  {event.subtitle}
-                </p>
-              ) : null}
-              <p className="text-xs text-[#78716C] font-medium pt-1 font-mono">{event.event_date}</p>
             </div>
-          </div>
 
-          {/* Center Cover Photo with Smooth Bottom Gradient Fade */}
-          <div className="w-full my-3 relative flex flex-col items-center px-2">
-            <div className="w-full max-w-xs sm:max-w-sm rounded-3xl overflow-hidden relative shadow-xl border border-[#E2D9CC]/60 bg-[#F4EFE6] flex items-center justify-center p-1.5">
-              <img
-                src={coverPublicUrl || '/default-wedding-cover.png'}
-                alt="Event Cover"
-                className="w-full h-auto max-h-[32vh] object-contain rounded-2xl"
-              />
-              {/* Bottom Gradient Fade Overlay to Cream */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#F9F6F0]/60 via-transparent to-transparent pointer-events-none" />
+            {/* Center Cover Photo Container */}
+            <div className="w-full relative flex flex-col items-center z-10 px-1 py-1">
+              <div className="w-full rounded-2xl overflow-hidden relative shadow-lg border border-[#E2D9CC] bg-[#F4EFE6] flex items-center justify-center p-1">
+                <img
+                  src={coverPublicUrl || '/default-wedding-cover.png'}
+                  alt="Event Cover"
+                  className="w-full h-auto max-h-[30vh] sm:max-h-[35vh] object-contain rounded-xl"
+                />
+              </div>
+              <p className="text-[11px] text-[#78716C] italic font-serif mt-2 relative z-10">
+                Create a memory for our special day
+              </p>
             </div>
-            <p className="text-xs text-[#78716C] italic font-serif mt-2.5 relative z-10">
-              Create a memory for our special day
-            </p>
-          </div>
 
-          {/* Bottom Action Button & Chevron */}
-          <div className="w-full space-y-2 pt-2">
-            <button
-              onClick={() => {
-                setStep(2);
-                startCamera();
-              }}
-              className="w-full py-4 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-medium text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-            >
-              <span>START PHOTOBOOTH</span>
-            </button>
-
-            <div className="pt-1">
-              <span className="inline-block text-[#8C6D46] text-sm animate-bounce opacity-70">
-                &or;
-              </span>
+            {/* Bottom Start Photobooth Button */}
+            <div className="w-full pt-1 z-10">
+              <button
+                onClick={() => {
+                  setStep(2);
+                  startCamera();
+                }}
+                className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-bold text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#423E3C]"
+              >
+                <span>START PHOTOBOOTH</span>
+              </button>
             </div>
           </div>
         </div>
