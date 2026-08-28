@@ -38,49 +38,5 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const url = request.nextUrl.clone();
-  const pathname = url.pathname;
-
-  // Protected Admin Routes (/admin/*)
-  if (pathname.startsWith('/admin')) {
-    const clientCookie = request.cookies.get('client_session')?.value;
-    const decodedCookie = clientCookie ? decodeURIComponent(clientCookie).toLowerCase() : '';
-    const isOwnerCookie =
-      decodedCookie.includes('teddyaditya69@gmail.com') ||
-      decodedCookie.includes('admin@photobooth.com') ||
-      decodedCookie.includes('owner') ||
-      decodedCookie.includes('admin');
-
-    if (!user && !isOwnerCookie) {
-      url.pathname = '/login';
-      return NextResponse.redirect(url);
-    }
-  }
-
-  // Protected Client Routes (/client/*)
-  if (pathname.startsWith('/client')) {
-    const clientCookie = request.cookies.get('client_session')?.value;
-    if (!user && !clientCookie) {
-      url.pathname = '/login';
-      return NextResponse.redirect(url);
-    }
-  }
-
-  // Auth pages redirect if already logged in
-  if (pathname === '/login' && user) {
-    const { data: profile } = await (supabase.from('profiles') as any)
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profile?.role === 'owner') {
-      url.pathname = '/admin';
-      return NextResponse.redirect(url);
-    } else {
-      url.pathname = '/client';
-      return NextResponse.redirect(url);
-    }
-  }
-
   return supabaseResponse;
 }

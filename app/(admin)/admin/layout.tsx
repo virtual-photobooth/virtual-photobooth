@@ -28,19 +28,69 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    async function getUser() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        setUserEmail(user.email || 'Owner');
-        setCheckingAuth(false);
-      } else {
-        router.push('/login');
+    async function checkAuth() {
+      // 1. Check API endpoint
+      try {
+        const res = await fetch('/api/auth/check-owner');
+        const data = await res.json();
+
+        if (res.ok && data?.authenticated) {
+          setUserEmail(data.email || 'Owner Admin');
+          setCheckingAuth(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Auth check error:', err);
       }
+
+      // 2. Check localStorage & document.cookie in browser
+      if (typeof window !== 'undefined') {
+        const getCookie = (name: string) => {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return decodeURIComponent(parts.pop()?.split(';').shift() || '');
+          return null;
+        };
+
+        const ownerCookie = getCookie('owner_session');
+        const clientCookie = getCookie('client_session');
+        const localOwner = localStorage.getItem('owner_session');
+        const localClient = localStorage.getItem('client_session');
+
+        if (ownerCookie || clientCookie || localOwner || localClient) {
+          const emailVal = ownerCookie || clientCookie || localOwner || localClient || 'Owner Admin';
+          setUserEmail(emailVal);
+          setCheckingAuth(false);
+          return;
+        }
+      }
+
+      // 3. Fallback: check Supabase client auth user
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUserEmail(user.email || 'Owner Admin');
+          setCheckingAuth(false);
+          return;
+        }
+      } catch (e) {}
+
+      router.push('/login');
     }
-    getUser();
+
+    checkAuth();
   }, [supabase, router]);
+
+  const handleSignOut = async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('owner_session');
+      localStorage.removeItem('client_session');
+      document.cookie = 'owner_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'client_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
 
   if (checkingAuth) {
     return (
@@ -50,11 +100,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
     );
   }
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
-  };
 
   const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },

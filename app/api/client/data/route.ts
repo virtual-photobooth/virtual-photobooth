@@ -49,21 +49,26 @@ export async function GET(request: Request) {
       events = clientEvents || [];
     }
 
-    // 3. Fallback: If client record exists or if client has events, match event
+    // 3. Fallback matching if client_id is not directly linked on events
     if (events.length === 0) {
       const { data: allEvents } = await (supabaseAdmin.from('events') as any)
-        .select('*')
+        .select('*, client:clients(*)')
         .order('created_at', { ascending: false });
 
       if (allEvents && allEvents.length > 0) {
         const matched = allEvents.filter(
           (e: any) =>
-            e.slug.toLowerCase().includes(email) ||
-            e.name.toLowerCase().includes(email) ||
-            email.includes('heru') ||
-            email.includes('client')
+            e.client_id === clientRecord?.id ||
+            e.client?.contact_email?.toLowerCase() === email ||
+            e.slug?.toLowerCase().includes(email) ||
+            e.name?.toLowerCase().includes(email)
         );
-        events = matched.length > 0 ? matched : [allEvents[0]];
+        if (matched.length > 0) {
+          events = matched;
+        } else if (allEvents.length === 1) {
+          // Single event in system
+          events = [allEvents[0]];
+        }
       }
     }
 

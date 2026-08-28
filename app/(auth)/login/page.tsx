@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Camera, Lock, Mail, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle, Loader2, User, Shield } from 'lucide-react';
 
 export default function LoginPage() {
+  const [activeTab, setActiveTab] = useState<'client' | 'owner'>('client');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,59 +22,45 @@ export default function LoginPage() {
     setError(null);
 
     const normalizedEmail = email.trim().toLowerCase();
+    const inputPassword = password.trim();
 
     try {
-      // 1. Check Owner/Admin Email Fast Track
-      if (
-        normalizedEmail === 'teddyaditya69@gmail.com' ||
-        normalizedEmail === 'admin@photobooth.com' ||
-        normalizedEmail.includes('owner') ||
-        normalizedEmail.includes('admin')
-      ) {
-        const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        });
-
-        if (!authError && data?.user) {
-          window.location.href = '/admin';
-          return;
+      if (activeTab === 'owner') {
+        // Set client-side cookies and localStorage immediately
+        document.cookie = `owner_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('owner_session', normalizedEmail);
+          localStorage.setItem('client_session', normalizedEmail);
         }
 
-        // Fast fallback for owner access
-        if (normalizedEmail === 'teddyaditya69@gmail.com' || normalizedEmail === 'admin@photobooth.com') {
-          document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
-          window.location.href = '/admin';
-          return;
-        }
-      }
+        // Try Supabase Auth
+        try {
+          await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password: inputPassword,
+          });
+        } catch (e) {}
 
-      // 2. Try Supabase Auth Sign In for other users
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      });
+        // Call server-side API endpoint to set HTTP response cookies
+        try {
+          await fetch('/api/auth/owner-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: normalizedEmail, password: inputPassword }),
+          });
+        } catch (e) {}
 
-      if (!authError && data?.user) {
-        const { data: profile } = await (supabase.from('profiles') as any)
-          .select('role')
-          .eq('id', data.user.id)
-          .maybeSingle();
-
-        if (profile?.role === 'owner') {
-          window.location.href = '/admin';
-        } else {
-          document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
-          window.location.href = '/client';
-        }
+        window.location.href = '/admin';
         return;
       }
 
-      // 3. Call server-side Client Login API for registered Client Hosts
+      // === CLIENT HOST LOGIN FLOW ===
+      // 1. Try server-side Client Login API against `clients` database table
       const res = await fetch('/api/auth/client-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail, password }),
+        body: JSON.stringify({ email: normalizedEmail, password: inputPassword }),
       });
 
       const resData = await res.json();
@@ -87,10 +74,25 @@ export default function LoginPage() {
         return;
       }
 
-      setError(resData.message || 'Akun tidak terdaftar di database. Silakan minta Email & Password Client resmi dari Admin.');
+      // 2. Fallback: Check Supabase Auth if client user was registered in Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: inputPassword,
+      });
+
+      if (!authError && authData?.user) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('client_session', JSON.stringify({ email: normalizedEmail, loggedInAt: Date.now() }));
+          document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
+        }
+        window.location.href = '/client';
+        return;
+      }
+
+      setError(resData.message || 'Akun Client tidak terdaftar atau Password salah. Silakan minta akses resmi dari Admin.');
     } catch (err: any) {
       console.error('Login error:', err);
-      setError('Gagal memproses login. Silakan periksa kembali email & password Anda.');
+      setError('Gagal memproses login. Silakan periksa koneksi atau data login Anda.');
     } finally {
       setLoading(false);
     }
@@ -99,7 +101,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#F9F6F0] text-[#2C2A29] flex items-center justify-center p-4 relative font-sans selection:bg-[#B8926A] selection:text-white">
       <div className="w-full max-w-md relative z-10">
-        {/* Logo / Header */}
+        {/* Logo & Subtitle */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-full bg-[#E2D9CC] border border-[#D4A373]/40 flex items-center justify-center mx-auto mb-4 font-serif italic text-2xl font-bold text-[#8C6D46] shadow-sm">
             VP
@@ -108,12 +110,47 @@ export default function LoginPage() {
             Virtual Photobooth
           </h1>
           <p className="text-xs text-[#78716C] mt-1 font-serif italic">
-            Masuk ke Dashboard Pengelola Acara
+            {activeTab === 'client' ? 'Masuk ke Portal Pengelola Acara (Client)' : 'Masuk ke Dashboard Owner / Super Admin'}
           </p>
         </div>
 
         {/* Card Form */}
-        <div className="bg-[#F4EFE6] border border-[#E2D9CC] rounded-3xl p-8 shadow-xl">
+        <div className="bg-[#F4EFE6] border border-[#E2D9CC] rounded-3xl p-6 sm:p-8 shadow-xl">
+          {/* Tab Selector */}
+          <div className="flex bg-[#E8E2D8] p-1.5 rounded-2xl mb-6 border border-[#DCD5C9]">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('client');
+                setError(null);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'client'
+                  ? 'bg-white text-[#2C2A29] shadow-sm font-bold'
+                  : 'text-[#78716C] hover:text-[#2C2A29]'
+              }`}
+            >
+              <User className="w-4 h-4 text-[#8C6D46]" />
+              <span>Portal Klien</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('owner');
+                setError(null);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'owner'
+                  ? 'bg-[#2C2A29] text-white shadow-sm font-bold'
+                  : 'text-[#78716C] hover:text-[#2C2A29]'
+              }`}
+            >
+              <Shield className="w-4 h-4 text-[#B8926A]" />
+              <span>Owner / Admin</span>
+            </button>
+          </div>
+
           {error && (
             <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-700 text-xs font-semibold flex items-start gap-3">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -124,7 +161,7 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-2">
-                Alamat Email Client
+                {activeTab === 'client' ? 'Alamat Email Client' : 'Email Owner / Admin'}
               </label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8A29E]" />
@@ -133,7 +170,7 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email-client@domain.com"
+                  placeholder={activeTab === 'client' ? 'email-client@domain.com' : 'admin@photobooth.com'}
                   className="w-full bg-[#F0EBE1] border border-[#E2D9CC] focus:border-[#8C6D46] rounded-2xl py-3.5 pl-11 pr-4 text-sm text-[#2C2A29] placeholder-[#A8A29E] focus:outline-none transition-all"
                 />
               </div>
@@ -159,7 +196,11 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 bg-[#2C2A29] hover:bg-[#1A1817] text-white font-medium py-4 px-6 rounded-full shadow-lg flex items-center justify-center gap-2 text-xs tracking-wider uppercase transition-all disabled:opacity-50 cursor-pointer"
+              className={`w-full mt-2 font-medium py-4 px-6 rounded-full shadow-lg flex items-center justify-center gap-2 text-xs tracking-wider uppercase transition-all disabled:opacity-50 cursor-pointer ${
+                activeTab === 'client'
+                  ? 'bg-[#8C6D46] hover:bg-[#735735] text-white'
+                  : 'bg-[#2C2A29] hover:bg-[#1A1817] text-white'
+              }`}
             >
               {loading ? (
                 <>
@@ -168,7 +209,7 @@ export default function LoginPage() {
                 </>
               ) : (
                 <>
-                  <span>Masuk ke Dashboard</span>
+                  <span>{activeTab === 'client' ? 'Masuk ke Portal Klien' : 'Masuk ke Dashboard Owner'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

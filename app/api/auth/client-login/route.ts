@@ -17,25 +17,10 @@ export async function POST(request: Request) {
     const inputPassword = password.trim();
     const supabaseAdmin = createAdminClient();
 
-    // 1. Owner/Admin Login Check
-    if (normalizedEmail === 'teddyaditya69@gmail.com' || normalizedEmail === 'admin@photobooth.com') {
-      const cookieStore = await cookies();
-      cookieStore.set('client_session', normalizedEmail, {
-        path: '/',
-        maxAge: 86400,
-        sameSite: 'lax',
-      });
-
-      return NextResponse.json({
-        success: true,
-        redirect: '/admin',
-      });
-    }
-
-    // 2. Strict Exact Email Match on `clients` table
-    const { data: clientRecord, error: clientErr } = await (supabaseAdmin.from('clients') as any)
+    // 1. Strict Email Match on `clients` table (case-insensitive)
+    let { data: clientRecord, error: clientErr } = await (supabaseAdmin.from('clients') as any)
       .select('id, name, contact_email, notes')
-      .eq('contact_email', normalizedEmail)
+      .ilike('contact_email', normalizedEmail)
       .maybeSingle();
 
     if (!clientRecord) {
