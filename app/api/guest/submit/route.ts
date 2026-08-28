@@ -20,9 +20,8 @@ export async function POST(request: Request) {
     const supabaseAdmin = createAdminClient();
     const finalGuestName = (guestName || 'Tamu Istimewa').trim();
 
-    // 1. Insert Guest into `guests` table with exact valid columns: (event_id, name)
+    // 1. Insert Guest into `guests` table
     let newGuest: any = null;
-    let guestErr: any = null;
 
     const { data: insertedGuest, error: err1 } = await (supabaseAdmin.from('guests') as any)
       .insert({
@@ -35,8 +34,6 @@ export async function POST(request: Request) {
     if (!err1 && insertedGuest) {
       newGuest = insertedGuest;
     } else {
-      guestErr = err1;
-      // Fallback: Select existing guest or create with minimal fields
       const { data: fbGuest } = await (supabaseAdmin.from('guests') as any)
         .select('*')
         .eq('event_id', eventId)
@@ -56,7 +53,8 @@ export async function POST(request: Request) {
     // 2. Process & Upload Photo to Storage and `photos` table
     if (photoBase64) {
       try {
-        const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
+        const rawPhotoStr = String(photoBase64);
+        const base64Data = rawPhotoStr.includes(',') ? rawPhotoStr.split(',')[1] : rawPhotoStr;
         const buffer = Buffer.from(base64Data, 'base64');
         const filename = `events/${eventId}/photos/photo_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
@@ -82,9 +80,10 @@ export async function POST(request: Request) {
     // 3. Process & Upload Voice Audio to Storage and `voice_messages` table
     if (voiceBase64) {
       try {
-        const base64Audio = voiceBase64.replace(/^data:audio\/\w+;base64,/, '');
+        const rawVoiceStr = String(voiceBase64);
+        const base64Audio = rawVoiceStr.includes(',') ? rawVoiceStr.split(',')[1] : rawVoiceStr;
         const audioBuffer = Buffer.from(base64Audio, 'base64');
-        const mime = voiceMimeType || 'audio/mp4';
+        const mime = voiceMimeType || 'audio/webm';
         const isMp4 = mime.includes('mp4') || mime.includes('aac') || mime.includes('m4a');
         const ext = isMp4 ? 'm4a' : 'webm';
         const filename = `events/${eventId}/voices/voice_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
@@ -95,12 +94,16 @@ export async function POST(request: Request) {
 
         if (!uploadVoiceErr) {
           voicePath = filename;
-          await (supabaseAdmin.from('voice_messages') as any).insert({
+          const { error: insertVoiceErr } = await (supabaseAdmin.from('voice_messages') as any).insert({
             event_id: eventId,
             guest_id: guestId,
             audio_path: filename,
-            duration_seconds: durationSeconds ? Number(durationSeconds) : 0,
+            duration_seconds: durationSeconds ? Number(durationSeconds) : 5,
           });
+
+          if (insertVoiceErr) {
+            console.error('Insert voice message DB error:', insertVoiceErr);
+          }
         } else {
           console.error('Upload voice storage error:', uploadVoiceErr);
         }
