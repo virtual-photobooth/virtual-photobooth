@@ -40,6 +40,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [supabase]);
 
   const handleSignOut = async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('client_session');
+      document.cookie = 'client_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
     await supabase.auth.signOut();
     router.push('/login');
   };

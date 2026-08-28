@@ -45,13 +45,12 @@ export default function LoginPage() {
 
       // 2. Client Host Fallback Access
       if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          'client_session',
-          JSON.stringify({
-            email: normalizedEmail || 'client@photobooth.com',
-            loggedInAt: Date.now(),
-          })
-        );
+        const sessionData = {
+          email: normalizedEmail || 'client@photobooth.com',
+          loggedInAt: Date.now(),
+        };
+        localStorage.setItem('client_session', JSON.stringify(sessionData));
+        document.cookie = `client_session=${encodeURIComponent(sessionData.email)}; path=/; max-age=86400; SameSite=Lax`;
       }
 
       if (normalizedEmail.includes('admin') || normalizedEmail === 'teddyaditya69@gmail.com') {
@@ -61,19 +60,21 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       console.error('Login fallback navigation:', err);
+      if (typeof window !== 'undefined') {
+        document.cookie = 'client_session=client@photobooth.com; path=/; max-age=86400; SameSite=Lax';
+      }
       window.location.href = '/client';
     }
   };
 
   const handleQuickClientLogin = () => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(
-        'client_session',
-        JSON.stringify({
-          email: 'client@photobooth.com',
-          loggedInAt: Date.now(),
-        })
-      );
+      const sessionData = {
+        email: 'client@photobooth.com',
+        loggedInAt: Date.now(),
+      };
+      localStorage.setItem('client_session', JSON.stringify(sessionData));
+      document.cookie = 'client_session=client@photobooth.com; path=/; max-age=86400; SameSite=Lax';
     }
     window.location.href = '/client';
   };

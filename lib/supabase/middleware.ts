@@ -61,7 +61,8 @@ export async function updateSession(request: NextRequest) {
 
   // Protected Client Routes (/client/*)
   if (pathname.startsWith('/client')) {
-    if (!user) {
+    const clientCookie = request.cookies.get('client_session')?.value;
+    if (!user && !clientCookie) {
       url.pathname = '/login';
       return NextResponse.redirect(url);
     }
