@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Download,
   CheckCircle2,
+  Check,
   Mic,
   Square,
   Play,
@@ -229,73 +230,84 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
     await startCamera(nextMode);
   };
 
-  // Trigger Sequential Photo Capture Sequence
-  const handleStartCaptureSequence = async () => {
-    if (!event) return;
+  // Trigger Single Photo Capture with Manual Control
+  const handleCaptureSinglePhoto = async () => {
+    if (!event || capturing) return;
     setCapturing(true);
-    setCapturedSnapshots([]);
-    const totalPhotos = event.photo_count || 4;
     const initialCountdown = event.countdown_seconds || 3;
 
-    const snapshots: string[] = [];
-
-    for (let i = 0; i < totalPhotos; i++) {
-      setCurrentPhotoIndex(i + 1);
-
-      // Countdown loop
-      for (let c = initialCountdown; c > 0; c--) {
-        setCountdown(c);
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-
-      setCountdown(0); // CAPTURE flash!
-      await new Promise((r) => setTimeout(r, 200));
-
-      // Snap frame from video
-      if (videoRef.current) {
-        const canvas = document.createElement('canvas');
-        canvas.width = videoRef.current.videoWidth || 1080;
-        canvas.height = videoRef.current.videoHeight || 1440;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          // Mirror front camera
-          if (facingMode === 'user') {
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
-          }
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          snapshots.push(canvas.toDataURL('image/jpeg', 0.92));
-          setCapturedSnapshots([...snapshots]);
-        }
-      }
-
-      setCountdown(null);
-      await new Promise((r) => setTimeout(r, 800)); // Pause between photos
+    // Countdown loop for current single photo
+    for (let c = initialCountdown; c > 0; c--) {
+      setCountdown(c);
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
-    setCapturing(false);
-    stopCamera();
+    setCountdown(0); // CAPTURE flash!
+    await new Promise((r) => setTimeout(r, 200));
 
-    // Generate Final Photo Composite
-    if (snapshots.length > 0) {
-      setCompositing(true);
-      setStep(3); // Result step
+    // Snap frame from video
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth || 1080;
+      canvas.height = videoRef.current.videoHeight || 1440;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        if (facingMode === 'user') {
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
-      try {
-        const compositeDataUrl = await createFinalPhotoComposite({
-          photos: snapshots,
-          frameImageUrl: framePublicUrl,
-          eventName: event.name,
-          eventDate: event.event_date,
-          photoCount: event.photo_count,
+        setCapturedSnapshots((prev) => {
+          const updated = [...prev];
+          updated[currentPhotoIndex - 1] = dataUrl;
+          return updated;
         });
-
-        setFinalCompositeUrl(compositeDataUrl);
-      } catch (err) {
-        console.error('Composite generation error:', err);
-      } finally {
-        setCompositing(false);
       }
+    }
+
+    setCountdown(null);
+    setCapturing(false);
+
+    const totalPhotos = event.photo_count || 4;
+    if (currentPhotoIndex < totalPhotos) {
+      setCurrentPhotoIndex((prev) => prev + 1);
+    }
+  };
+
+  // Retake a specific photo by index (0-based)
+  const handleRetakePhotoSlot = (slotIndex: number) => {
+    if (capturing) return;
+    setCapturedSnapshots((prev) => {
+      const updated = [...prev];
+      updated.splice(slotIndex, 1);
+      return updated;
+    });
+    setCurrentPhotoIndex(slotIndex + 1);
+  };
+
+  // Proceed to Final Photo Composite Generation
+  const handleProceedToComposite = async () => {
+    if (!event || capturedSnapshots.length === 0) return;
+    stopCamera();
+    setCompositing(true);
+    setStep(3); // Result step
+
+    try {
+      const compositeDataUrl = await createFinalPhotoComposite({
+        photos: capturedSnapshots,
+        frameImageUrl: framePublicUrl,
+        eventName: event.name,
+        eventDate: event.event_date,
+        photoCount: event.photo_count,
+      });
+
+      setFinalCompositeUrl(compositeDataUrl);
+    } catch (err) {
+      console.error('Composite generation error:', err);
+    } finally {
+      setCompositing(false);
     }
   };
 
@@ -593,20 +605,88 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
             )}
           </div>
 
-          {/* Bottom Shutter Controls */}
-          <div className="w-full pt-6 flex flex-col items-center gap-3 z-20">
-            {!capturing ? (
-              <button
-                onClick={handleStartCaptureSequence}
-                className="w-20 h-20 rounded-full border-4 border-[#2C2A29] p-1 shadow-2xl flex items-center justify-center group active:scale-90 transition-all cursor-pointer"
-              >
-                <div className="w-full h-full rounded-full bg-[#2C2A29] group-hover:bg-[#8C6D46] transition-colors flex items-center justify-center">
-                  <Camera className="w-8 h-8 text-white" />
-                </div>
-              </button>
+          {/* Bottom Shutter Controls & Photo Progress */}
+          <div className="w-full pt-4 flex flex-col items-center gap-3 z-20">
+            {/* Captured Photos Progress Bar / Thumbnails */}
+            <div className="flex items-center justify-center gap-2.5 mb-1">
+              {Array.from({ length: event.photo_count || 4 }).map((_, idx) => {
+                const capturedSrc = capturedSnapshots[idx];
+                const isCurrent = currentPhotoIndex === idx + 1;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      if (capturedSrc && !capturing) {
+                        handleRetakePhotoSlot(idx);
+                      }
+                    }}
+                    className={`relative w-12 h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                      capturedSrc
+                        ? 'border-emerald-600 shadow-sm'
+                        : isCurrent
+                        ? 'border-[#8C6D46] bg-[#F4EFE6] animate-pulse'
+                        : 'border-[#E2D9CC] bg-[#E5DFD5]'
+                    }`}
+                  >
+                    {capturedSrc ? (
+                      <>
+                        <img src={capturedSrc} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                        <div className="absolute top-0.5 right-0.5 bg-emerald-600 text-white rounded-full p-0.5 shadow-xs">
+                          <Check className="w-2.5 h-2.5" />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-[10px] font-bold text-[#78716C]">
+                        <span>#{idx + 1}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Shutter Button & Action Controls */}
+            {capturing ? (
+              <div className="text-xs font-semibold text-[#8C6D46] tracking-wider uppercase animate-pulse py-3">
+                Memfoto Gambar Ke-{currentPhotoIndex}...
+              </div>
+            ) : capturedSnapshots.length < event.photo_count ? (
+              <div className="flex flex-col items-center gap-2.5 w-full">
+                <button
+                  onClick={handleCaptureSinglePhoto}
+                  className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-semibold text-xs tracking-wider uppercase shadow-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-95 border border-[#423E3C]"
+                >
+                  <Camera className="w-4 h-4 text-[#D4A373]" />
+                  <span>Ambil Foto Ke-{currentPhotoIndex}</span>
+                </button>
+
+                {capturedSnapshots.length > 0 && (
+                  <button
+                    onClick={() => handleRetakePhotoSlot(capturedSnapshots.length - 1)}
+                    className="text-xs font-medium text-[#78716C] hover:text-[#2C2A29] underline transition-colors cursor-pointer py-1 flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Ulangi Foto Ke-{capturedSnapshots.length}</span>
+                  </button>
+                )}
+              </div>
             ) : (
-              <div className="text-xs font-semibold text-[#8C6D46] tracking-wider uppercase animate-pulse py-4">
-                Capturing Photo {currentPhotoIndex} of {event.photo_count}...
+              <div className="flex flex-col items-center gap-2.5 w-full">
+                <button
+                  onClick={handleProceedToComposite}
+                  className="w-full py-4 px-6 rounded-full bg-gradient-to-r from-[#2C2A29] to-[#423E3C] hover:from-[#1A1817] hover:to-[#2C2A29] text-white font-bold text-xs tracking-widest uppercase shadow-2xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#D4A373]/40"
+                >
+                  <Sparkles className="w-4 h-4 text-[#D4A373] animate-spin" />
+                  <span>Proses & Lihat Hasil Bingkai</span>
+                </button>
+
+                <button
+                  onClick={() => handleRetakePhotoSlot(capturedSnapshots.length - 1)}
+                  className="text-xs font-medium text-[#78716C] hover:text-[#2C2A29] underline transition-colors cursor-pointer py-1 flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Foto Ulang Jepretan Terakhir</span>
+                </button>
               </div>
             )}
           </div>
