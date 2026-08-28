@@ -53,17 +53,12 @@ export default function PrintableQrModal({
       ctx.strokeRect(80, 80, canvas.width - 160, canvas.height - 160);
 
       // Top Monogram Initials
-      const initials = monogram || eventName
-        .split(' ')
-        .map((w) => w[0])
-        .join('')
-        .substring(0, 3)
-        .toUpperCase();
-
-      ctx.fillStyle = '#8C6D46';
-      ctx.font = 'bold 56px "Playfair Display", Georgia, serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(initials, canvas.width / 2, 220);
+      if (monogram && monogram.trim().length > 0) {
+        ctx.fillStyle = '#8C6D46';
+        ctx.font = 'bold 56px "Playfair Display", Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(monogram, canvas.width / 2, 220);
+      }
 
       // Event Name
       ctx.fillStyle = '#2C2A29';
@@ -150,17 +145,19 @@ export default function PrintableQrModal({
 
         {/* Card Preview */}
         <div className="bg-[#F8F5F0] border-4 border-[#D4A373] rounded-2xl p-6 text-center shadow-inner space-y-4 my-2 text-[#2C2A29]">
-          <span
-            className={`font-serif italic font-bold text-[#8C6D46] whitespace-nowrap block ${
-              (monogram || eventName).length > 4
-                ? 'text-sm'
-                : (monogram || eventName).length > 2
-                ? 'text-base'
-                : 'text-xl'
-            }`}
-          >
-            {monogram || eventName.substring(0, 2).toUpperCase()}
-          </span>
+          {monogram && monogram.trim().length > 0 && (
+            <span
+              className={`font-serif italic font-bold text-[#8C6D46] whitespace-nowrap block ${
+                monogram.length > 4
+                  ? 'text-sm'
+                  : monogram.length > 2
+                  ? 'text-base'
+                  : 'text-xl'
+              }`}
+            >
+              {monogram}
+            </span>
+          )}
           <h3 className="font-serif font-bold text-xl">{eventName}</h3>
           <p className="text-xs text-[#78716C]">{eventDate}</p>
 

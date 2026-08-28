@@ -32,8 +32,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const [formData, setFormData] = useState({
     client_id: '',
     name: '',
-    monogram: 'C | B',
-    subtitle: 'WEDDING',
+    monogram: '',
+    subtitle: '',
     slug: '',
     event_date: '',
     status: 'draft' as EventStatus,
@@ -71,11 +71,25 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         setEvent(eventData as Event);
         if (clientsData?.clients) setClients(clientsData.clients);
 
+        let initialMonogram = eventData.monogram ?? '';
+        let initialSubtitle = eventData.subtitle ?? '';
+
+        if (typeof window !== 'undefined') {
+          const savedMeta = localStorage.getItem(`event_meta_${eventId}`);
+          if (savedMeta) {
+            try {
+              const parsed = JSON.parse(savedMeta);
+              if (parsed.monogram !== undefined) initialMonogram = parsed.monogram;
+              if (parsed.subtitle !== undefined) initialSubtitle = parsed.subtitle;
+            } catch (e) {}
+          }
+        }
+
         setFormData({
           client_id: eventData.client_id || '',
           name: eventData.name || '',
-          monogram: eventData.monogram || '',
-          subtitle: eventData.subtitle || '',
+          monogram: initialMonogram,
+          subtitle: initialSubtitle,
           slug: eventData.slug || '',
           event_date: eventData.event_date || '',
           status: eventData.status || 'draft',
@@ -277,8 +291,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         localStorage.setItem(
           `event_meta_${eventId}`,
           JSON.stringify({
-            monogram: formData.monogram || '',
-            subtitle: formData.subtitle || '',
+            monogram: formData.monogram ?? '',
+            subtitle: formData.subtitle ?? '',
           })
         );
       }
@@ -287,8 +301,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       const updatePayload: any = {
         client_id: formData.client_id,
         name: formData.name,
-        monogram: formData.monogram || '',
-        subtitle: formData.subtitle || '',
+        monogram: formData.monogram ?? '',
+        subtitle: formData.subtitle ?? '',
         slug: formData.slug,
         event_date: formData.event_date,
         status: formData.status,
@@ -305,11 +319,12 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         .eq('id', eventId);
 
       if (updateErr) {
-        console.warn('DB update failed, attempting safe payload without missing schema columns:', updateErr);
-        // Strip optional columns if DB schema cache has not added them
+        console.warn('DB update failed, attempting safe payload:', updateErr);
         const safePayload: any = {
           client_id: formData.client_id,
           name: formData.name,
+          monogram: formData.monogram ?? '',
+          subtitle: formData.subtitle ?? '',
           slug: formData.slug,
           event_date: formData.event_date,
           status: formData.status,
@@ -332,8 +347,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         prev
           ? {
               ...prev,
-              monogram: formData.monogram || '',
-              subtitle: formData.subtitle || '',
+              monogram: formData.monogram ?? '',
+              subtitle: formData.subtitle ?? '',
             }
           : prev
       );

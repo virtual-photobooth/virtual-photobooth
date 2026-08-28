@@ -22,7 +22,7 @@ export default function CreateEventPage() {
   const [formData, setFormData] = useState({
     client_id: '',
     name: '',
-    monogram: 'WE',
+    monogram: '',
     slug: '',
     event_date: new Date().toISOString().split('T')[0],
     status: 'active' as EventStatus,
@@ -122,7 +122,7 @@ export default function CreateEventPage() {
       const insertPayload: any = {
         client_id: targetClientId,
         name: formData.name,
-        monogram: formData.monogram || 'WE',
+        monogram: formData.monogram ?? '',
         slug: formData.slug,
         event_date: formData.event_date,
         status: formData.status,
