@@ -10,6 +10,8 @@ import {
   Download,
   CheckCircle2,
   Check,
+  Zap,
+  ZapOff,
   Mic,
   Square,
   Play,
@@ -46,6 +48,8 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
   const [capturedSnapshots, setCapturedSnapshots] = useState<string[]>([]);
   const [finalCompositeUrl, setFinalCompositeUrl] = useState<string | null>(null);
   const [compositing, setCompositing] = useState(false);
+  const [flashEnabled, setFlashEnabled] = useState(false);
+  const [screenFlash, setScreenFlash] = useState(false);
 
   // Guest Details State
   const [guestName, setGuestName] = useState('');
@@ -230,6 +234,27 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
     await startCamera(nextMode);
   };
 
+  // Toggle Camera Flash (Torch & Screen Flash)
+  const toggleFlash = async () => {
+    const nextState = !flashEnabled;
+    setFlashEnabled(nextState);
+
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      const track = stream.getVideoTracks()[0];
+      if (track && 'applyConstraints' in track) {
+        try {
+          const caps: any = track.getCapabilities ? track.getCapabilities() : {};
+          if (caps.torch) {
+            await track.applyConstraints({ advanced: [{ torch: nextState }] as any });
+          }
+        } catch (e) {
+          console.log('Hardware torch constraint not available:', e);
+        }
+      }
+    }
+  };
+
   // Trigger Single Photo Capture with Manual Control
   const handleCaptureSinglePhoto = async () => {
     if (!event || capturing) return;
@@ -243,6 +268,10 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
     }
 
     setCountdown(0); // CAPTURE flash!
+    if (flashEnabled) {
+      setScreenFlash(true);
+      setTimeout(() => setScreenFlash(false), 350);
+    }
     await new Promise((r) => setTimeout(r, 200));
 
     // Snap frame from video
@@ -563,21 +592,53 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
       {/* STEP 2: CAMERA VIEW & COUNTDOWN */}
       {step === 2 && (
         <div className="flex-1 flex flex-col justify-between items-center relative animate-fade-in">
-          {/* Header Controls */}
-          <div className="w-full flex items-center justify-between z-20 pb-4">
-            <div className="text-xs font-semibold uppercase tracking-wider text-[#8C6D46] bg-[#F4EFE6] px-3 py-1 rounded-full border border-[#E2D9CC]">
+          {/* Fullscreen White Screen Flash Effect */}
+          {screenFlash && (
+            <div className="fixed inset-0 bg-white z-[999] pointer-events-none animate-pulse transition-opacity duration-100" />
+          )}
+
+          {/* Elegant Top Header Controls */}
+          <div className="w-full flex items-center justify-between z-20 pb-4 px-1">
+            {/* Flash Button */}
+            <button
+              onClick={toggleFlash}
+              disabled={capturing}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg transition-all border cursor-pointer active:scale-95 ${
+                flashEnabled
+                  ? 'bg-[#2C2A29] text-[#F59E0B] border-[#F59E0B]/60 shadow-[0_0_15px_rgba(245,158,11,0.35)]'
+                  : 'bg-[#2C2A29]/80 backdrop-blur-md text-white/80 border-[#E2D9CC]/30 hover:bg-[#1A1817]'
+              }`}
+            >
+              {flashEnabled ? (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B] animate-pulse" />
+                  <span>Flash ON</span>
+                </>
+              ) : (
+                <>
+                  <ZapOff className="w-3.5 h-3.5 text-white/60" />
+                  <span>Flash OFF</span>
+                </>
+              )}
+            </button>
+
+            {/* Photo Counter Progress Badge */}
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#8C6D46] bg-[#F4EFE6] px-3 py-1 rounded-full border border-[#E2D9CC] shadow-xs">
               {capturing
-                ? `Photo ${currentPhotoIndex} / ${event.photo_count}`
-                : `Ready (${event.photo_count} Snapshots)`}
+                ? `Foto ${currentPhotoIndex} / ${event.photo_count}`
+                : `Progress ${capturedSnapshots.length} / ${event.photo_count}`}
             </div>
 
+            {/* Elegant Camera Flip Button */}
             <button
               onClick={toggleCameraFacing}
               disabled={capturing}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#2C2A29] text-white hover:bg-[#1A1817] text-xs font-semibold shadow-md transition-all disabled:opacity-40 cursor-pointer active:scale-95 border border-[#423E3C]"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#2C2A29]/90 backdrop-blur-md text-white hover:bg-[#1A1817] text-xs font-semibold shadow-xl transition-all disabled:opacity-40 cursor-pointer active:scale-95 border border-[#D4A373]/40 hover:border-[#D4A373]"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-[#D4A373]" />
-              <span>{facingMode === 'user' ? '📷 Kamera Depan' : '📸 Kamera Belakang'}</span>
+              <RefreshCw className="w-3.5 h-3.5 text-[#D4A373] transition-transform duration-500 hover:rotate-180" />
+              <span className="tracking-wide">
+                {facingMode === 'user' ? 'Kamera Depan' : 'Kamera Belakang'}
+              </span>
             </button>
           </div>
 
