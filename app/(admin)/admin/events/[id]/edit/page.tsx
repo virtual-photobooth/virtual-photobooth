@@ -76,24 +76,24 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           if (storedMeta) {
             try {
               const parsed = JSON.parse(storedMeta);
-              if (parsed.monogram) metaMonogram = parsed.monogram;
-              if (parsed.subtitle) metaSubtitle = parsed.subtitle;
+              if (parsed.monogram !== undefined) metaMonogram = parsed.monogram;
+              if (parsed.subtitle !== undefined) metaSubtitle = parsed.subtitle;
             } catch (e) {}
           }
         }
 
         setFormData({
-          client_id: eventData.client_id,
-          name: eventData.name,
-          monogram: metaMonogram || 'C | B',
-          subtitle: metaSubtitle || 'WEDDING',
-          slug: eventData.slug,
-          event_date: eventData.event_date,
-          status: eventData.status,
-          photo_count: eventData.photo_count,
-          countdown_seconds: eventData.countdown_seconds,
-          is_voice_enabled: eventData.is_voice_enabled,
-          voice_retention_days: eventData.voice_retention_days,
+          client_id: eventData.client_id || '',
+          name: eventData.name || '',
+          monogram: metaMonogram !== undefined && metaMonogram !== null ? metaMonogram : (eventData.monogram || ''),
+          subtitle: metaSubtitle !== undefined && metaSubtitle !== null ? metaSubtitle : (eventData.subtitle || ''),
+          slug: eventData.slug || '',
+          event_date: eventData.event_date || '',
+          status: eventData.status || 'draft',
+          photo_count: eventData.photo_count || 4,
+          countdown_seconds: eventData.countdown_seconds || 3,
+          is_voice_enabled: eventData.is_voice_enabled ?? true,
+          voice_retention_days: eventData.voice_retention_days || 7,
         });
 
         if (eventData.frame_path) {
@@ -265,9 +265,11 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     }
 
     try {
+      const coverStoragePath = `events/${eventId}/cover/cover.jpg`;
+      const frameStoragePath = `events/${eventId}/frame/frame.png`;
+
       // 1. Auto-upload cover file if selected
       if (coverFile) {
-        const coverStoragePath = `events/${eventId}/cover/cover.jpg`;
         const { error: coverUploadErr } = await supabase.storage
           .from('virtual-photobooth')
           .upload(coverStoragePath, coverFile, {
@@ -276,29 +278,28 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           });
         if (coverUploadErr) console.warn('Cover upload error:', coverUploadErr);
         setCoverFile(null);
+        setCoverPreviewUrl(`${supabase.storage.from('virtual-photobooth').getPublicUrl(coverStoragePath).data.publicUrl}?t=${Date.now()}`);
       }
 
       // 2. Auto-upload frame file if selected
       if (frameFile) {
-        const frameStoragePath = `events/${eventId}/frame/frame.png`;
         const { error: frameUploadErr } = await supabase.storage
           .from('virtual-photobooth')
           .upload(frameStoragePath, frameFile, {
             upsert: true,
             contentType: 'image/png',
           });
-        if (frameUploadErr) console.warn('Frame upload error:', frameUploadErr);
+        if (frameUploadErr) throw frameUploadErr;
         setFrameFile(null);
+        setFramePreviewUrl(`${supabase.storage.from('virtual-photobooth').getPublicUrl(frameStoragePath).data.publicUrl}?t=${Date.now()}`);
       }
 
-      const coverStoragePath = `events/${eventId}/cover/cover.jpg`;
-
-      // Try full payload update
+      // 3. Update database record with frame_path & cover_path
       const fullPayload: any = {
         client_id: formData.client_id,
         name: formData.name,
         monogram: formData.monogram,
-        subtitle: formData.subtitle || 'WEDDING',
+        subtitle: formData.subtitle,
         slug: formData.slug,
         event_date: formData.event_date,
         status: formData.status,
@@ -306,6 +307,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         countdown_seconds: Number(formData.countdown_seconds),
         is_voice_enabled: formData.is_voice_enabled,
         voice_retention_days: Number(formData.voice_retention_days),
+        frame_path: frameStoragePath,
         cover_path: coverStoragePath,
       };
 
@@ -325,6 +327,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           countdown_seconds: Number(formData.countdown_seconds),
           is_voice_enabled: formData.is_voice_enabled,
           voice_retention_days: Number(formData.voice_retention_days),
+          frame_path: frameStoragePath,
         };
 
         const { error: safeErr } = await (supabase.from('events') as any)
@@ -334,7 +337,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         if (safeErr) throw safeErr;
       }
 
-      setMessage({ type: 'success', text: 'Perubahan event (Subtitle, Monogram, Foto Cover) berhasil disimpan & disinkronkan!' });
+      setMessage({ type: 'success', text: 'Perubahan event (Bingkai PNG, Subtitle, Monogram, Foto Cover) berhasil disimpan & disinkronkan!' });
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Failed to update event' });
     } finally {

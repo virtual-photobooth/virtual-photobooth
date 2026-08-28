@@ -583,9 +583,11 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
               <h1 className="font-serif text-3xl sm:text-4xl font-bold text-[#2C2A29] uppercase tracking-wider leading-snug px-2">
                 {event.name}
               </h1>
-              <p className="text-xs uppercase tracking-[0.3em] font-semibold text-[#8C6D46]">
-                {event.subtitle || 'WEDDING'}
-              </p>
+              {event.subtitle && event.subtitle.trim().length > 0 ? (
+                <p className="text-xs uppercase tracking-[0.3em] font-semibold text-[#8C6D46]">
+                  {event.subtitle}
+                </p>
+              ) : null}
               <p className="text-xs text-[#78716C] font-medium pt-1 font-mono">{event.event_date}</p>
             </div>
           </div>
