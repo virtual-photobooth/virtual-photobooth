@@ -61,27 +61,31 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     // FULL-BLEED SLOT MATH: Photos bleed 100% behind transparent windows of the PNG frame.
     // The PNG frame sitting ON TOP at (0, 0) acts as the natural stencil mask for rounded corners, borders & text!
     if (photoCount === 2) {
-      // 2-Photo 100% Total Canvas Height Coverage:
-      // Photo 1 covers y: 0 to 1750. Photo 2 covers y: 1490 to 3240.
-      // Total coverage is 100% from top (y: 0) to bottom (y: 3240), eliminating 100% of white gaps or background strips!
+      // 2-Photo Seamless Mid-Bar Dividing Boundary (y: 1620):
+      // Slot 1 covers y: 0 to 1620; Slot 2 covers y: 1620 to 3240.
+      // The boundary line y=1620 sits 100% hidden behind the solid blue middle bar under "Anniversary 14".
+      // Photos fill 100% of their cutout windows with ZERO white gaps AND ZERO visible photo edges poking out!
       slots = [
-        { x: 0, y: 0, w: canvasWidth, h: 1750 },
-        { x: 0, y: 1490, w: canvasWidth, h: 1750 },
+        { x: 0, y: 0, w: canvasWidth, h: 1620 },
+        { x: 0, y: 1620, w: canvasWidth, h: 1620 },
       ];
     } else if (photoCount === 3) {
-      // 3-Photo 100% Total Canvas Height Coverage
+      // 3-Photo Seamless Strip Boundaries
+      const h3 = canvasHeight / 3;
       slots = [
-        { x: 0, y: 0, w: canvasWidth, h: 1200 },
-        { x: 0, y: 1000, w: canvasWidth, h: 1240 },
-        { x: 0, y: 2040, w: canvasWidth, h: 1200 },
+        { x: 0, y: 0, w: canvasWidth, h: h3 },
+        { x: 0, y: h3, w: canvasWidth, h: h3 },
+        { x: 0, y: h3 * 2, w: canvasWidth, h: h3 },
       ];
     } else if (photoCount === 4) {
-      // 4-Photo 100% Total Canvas Height Coverage
+      // 4-Photo Seamless Grid Boundaries
+      const w2 = canvasWidth / 2;
+      const h2 = canvasHeight / 2;
       slots = [
-        { x: 0, y: 0, w: 1140, h: 1750 },
-        { x: 1020, y: 0, w: 1140, h: 1750 },
-        { x: 0, y: 1490, w: 1140, h: 1750 },
-        { x: 1020, y: 1490, w: 1140, h: 1750 },
+        { x: 0, y: 0, w: w2, h: h2 },
+        { x: w2, y: 0, w: w2, h: h2 },
+        { x: 0, y: h2, w: w2, h: h2 },
+        { x: w2, y: h2, w: w2, h: h2 },
       ];
     } else {
       // Default N-Photo Full Bleed
