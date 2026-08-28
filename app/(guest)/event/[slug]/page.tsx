@@ -258,7 +258,11 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
   // Trigger Single Photo Capture with Manual Control
   const handleCaptureSinglePhoto = async () => {
     if (!event || capturing) return;
+    const totalPhotos = event.photo_count || 4;
+    if (capturedSnapshots.length >= totalPhotos) return;
+
     setCapturing(true);
+    const targetSlotIndex = capturedSnapshots.length;
     const initialCountdown = event.countdown_seconds || 3;
 
     // Countdown loop for current single photo
@@ -290,7 +294,7 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
 
         setCapturedSnapshots((prev) => {
           const updated = [...prev];
-          updated[currentPhotoIndex - 1] = dataUrl;
+          updated[targetSlotIndex] = dataUrl;
           return updated;
         });
       }
@@ -298,11 +302,6 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
 
     setCountdown(null);
     setCapturing(false);
-
-    const totalPhotos = event.photo_count || 4;
-    if (currentPhotoIndex < totalPhotos) {
-      setCurrentPhotoIndex((prev) => prev + 1);
-    }
   };
 
   // Retake a specific photo by index (0-based)

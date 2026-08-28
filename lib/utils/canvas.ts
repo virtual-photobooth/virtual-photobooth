@@ -61,26 +61,26 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     // FULL-BLEED SLOT MATH: Photos bleed 100% behind transparent windows of the PNG frame.
     // The PNG frame sitting ON TOP at (0, 0) acts as the natural stencil mask for rounded corners, borders & text!
     if (photoCount === 2) {
-      // 2-Photo Full Bleed: Top photo covers y: 0 to 1850; Bottom photo covers y: 1390 to 3240.
-      // Photos overlap behind middle "Anniversary 14" bar, guaranteeing ZERO WHITE GAPS in any transparent window!
+      // 2-Photo Precision Slot Bounds: Top photo y: 240 to 1360; Bottom photo y: 1660 to 2900.
+      // Photos fill their exact cutout windows without bleeding past the middle "Anniversary 14" text bar!
       slots = [
-        { x: 0, y: 0, w: canvasWidth, h: 1850 },
-        { x: 0, y: 1390, w: canvasWidth, h: 1850 },
+        { x: 80, y: 240, w: canvasWidth - 160, h: 1120 },
+        { x: 80, y: 1660, w: canvasWidth - 160, h: 1240 },
       ];
     } else if (photoCount === 3) {
-      // 3-Photo Full Bleed Strip
+      // 3-Photo Precision Strip
       slots = [
-        { x: 0, y: 0, w: canvasWidth, h: 1250 },
-        { x: 0, y: 990, w: canvasWidth, h: 1260 },
-        { x: 0, y: 1990, w: canvasWidth, h: 1250 },
+        { x: 100, y: 260, w: canvasWidth - 200, h: 780 },
+        { x: 100, y: 1100, w: canvasWidth - 200, h: 780 },
+        { x: 100, y: 1940, w: canvasWidth - 200, h: 780 },
       ];
     } else if (photoCount === 4) {
-      // 4-Photo Full Bleed Grid
+      // 4-Photo Precision Grid
       slots = [
-        { x: 0, y: 0, w: 1140, h: 1850 },
-        { x: 1020, y: 0, w: 1140, h: 1850 },
-        { x: 0, y: 1390, w: 1140, h: 1850 },
-        { x: 1020, y: 1390, w: 1140, h: 1850 },
+        { x: 100, y: 320, w: 930, h: 1150 },
+        { x: 1130, y: 320, w: 930, h: 1150 },
+        { x: 100, y: 1530, w: 930, h: 1150 },
+        { x: 1130, y: 1530, w: 930, h: 1150 },
       ];
     } else {
       // Default N-Photo Full Bleed
