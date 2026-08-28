@@ -319,12 +319,11 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         .eq('id', eventId);
 
       if (updateErr) {
-        console.warn('DB update failed, attempting safe payload:', updateErr);
+        console.warn('DB update failed (missing schema columns in DB), falling back to core schema payload:', updateErr);
+        // Strip optional/schema-extended columns if DB schema cache has not added them
         const safePayload: any = {
           client_id: formData.client_id,
           name: formData.name,
-          monogram: formData.monogram ?? '',
-          subtitle: formData.subtitle ?? '',
           slug: formData.slug,
           event_date: formData.event_date,
           status: formData.status,

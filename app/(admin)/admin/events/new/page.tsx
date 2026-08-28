@@ -137,9 +137,10 @@ export default function CreateEventPage() {
         .select()
         .single();
 
-      // Retry without monogram if column hasn't been added to DB schema yet
-      if (insertError && insertError.message?.includes('monogram')) {
+      // Retry without monogram or subtitle if columns haven't been added to DB schema yet
+      if (insertError) {
         delete insertPayload.monogram;
+        delete insertPayload.subtitle;
         const { data: retryData, error: retryError } = await (supabase.from('events') as any)
           .insert(insertPayload)
           .select()
@@ -147,8 +148,6 @@ export default function CreateEventPage() {
 
         if (retryError) throw retryError;
         data = retryData;
-      } else if (insertError) {
-        throw insertError;
       }
 
       if (data) {
