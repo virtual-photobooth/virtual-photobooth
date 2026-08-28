@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Client } from '@/lib/types/database';
-import { Users, Plus, Mail, Phone, FileText, Search, Loader2, X, Edit3, Trash2, AlertTriangle } from 'lucide-react';
+import { Users, Plus, Mail, Phone, FileText, Search, Loader2, X, Edit3, Trash2, AlertTriangle, Key, Copy } from 'lucide-react';
+import { generateUniqueClientCredentials, generateUniquePassword } from '@/lib/utils/credentials';
 
 export default function ClientsPage() {
   const supabase = createClient();
@@ -81,12 +82,25 @@ export default function ClientsPage() {
 
         if (error) throw error;
       } else {
-        // Insert new
+        // Insert new with unique credentials
+        let clientEmail = formData.contact_email?.trim().toLowerCase();
+        let generatedPass = '';
+
+        if (!clientEmail) {
+          const creds = await generateUniqueClientCredentials(supabase, formData.name);
+          clientEmail = creds.email;
+          generatedPass = creds.password;
+        } else {
+          generatedPass = generateUniquePassword(formData.name);
+        }
+
+        const notesContent = `Password: ${generatedPass}${formData.notes ? ` | ${formData.notes}` : ''}`;
+
         const { error } = await (supabase.from('clients') as any).insert({
           name: formData.name,
-          contact_email: formData.contact_email || null,
+          contact_email: clientEmail,
           contact_phone: formData.contact_phone || null,
-          notes: formData.notes || null,
+          notes: notesContent,
         });
 
         if (error) throw error;
@@ -195,7 +209,39 @@ export default function ClientsPage() {
                   </div>
                 </div>
 
-                <h3 className="text-base font-bold text-[#1A2621] mb-3">{client.name}</h3>
+                <h3 className="text-base font-bold text-[#1A2621] mb-2">{client.name}</h3>
+
+                {/* Unique Login Credentials Box */}
+                <div className="bg-emerald-50/80 border border-emerald-200/80 p-3 rounded-xl space-y-1 my-3 text-xs">
+                  <div className="flex items-center justify-between text-[#2A473E] font-bold text-[11px]">
+                    <span className="flex items-center gap-1">
+                      <Key className="w-3 h-3" />
+                      <span>Kredensial Login Client:</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        const email = client.contact_email || 'No email';
+                        const passMatch = client.notes?.match(/Password:\s*([^\s|]+)/);
+                        const pass = passMatch ? passMatch[1] : 'VP-PASS-1234';
+                        navigator.clipboard.writeText(`Email: ${email}\nPassword: ${pass}`);
+                        alert(`Kredensial disalin!\nEmail: ${email}\nPassword: ${pass}`);
+                      }}
+                      className="text-[10px] bg-[#2A473E] text-white px-2.5 py-0.5 rounded-md hover:bg-[#1E362F] cursor-pointer flex items-center gap-1 shadow-2xs font-semibold"
+                    >
+                      <Copy className="w-2.5 h-2.5" />
+                      <span>Salin Kredensial</span>
+                    </button>
+                  </div>
+                  <div className="font-mono text-[11px] text-slate-700">
+                    Email: <span className="font-bold text-[#1A2621]">{client.contact_email || 'Belum diatur'}</span>
+                  </div>
+                  <div className="font-mono text-[11px] text-slate-700">
+                    Password:{' '}
+                    <span className="font-bold text-[#2A473E]">
+                      {client.notes?.match(/Password:\s*([^\s|]+)/)?.[1] || 'Otomatis Dibuat Admin'}
+                    </span>
+                  </div>
+                </div>
 
                 <div className="space-y-2 text-xs text-slate-600">
                   <div className="flex items-center gap-2">

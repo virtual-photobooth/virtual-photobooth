@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Client, EventStatus } from '@/lib/types/database';
 import { generateSlug } from '@/lib/utils/slug';
+import { generateUniqueClientCredentials } from '@/lib/utils/credentials';
 import { Calendar, ArrowLeft, Loader2, Sparkles, AlertCircle, Plus } from 'lucide-react';
 import Link from 'next/link';
 
@@ -62,10 +63,13 @@ export default function CreateEventPage() {
     setError(null);
     try {
       const defaultName = formData.name ? `${formData.name} Host` : 'Default Event Host';
+      const creds = await generateUniqueClientCredentials(supabase, defaultName);
+
       const { data: newClient, error: insertErr } = await (supabase.from('clients') as any)
         .insert({
           name: defaultName,
-          notes: 'Auto-created client host',
+          contact_email: creds.email,
+          notes: `Password: ${creds.password} | Auto-created client host`,
         })
         .select()
         .single();
@@ -96,13 +100,16 @@ export default function CreateEventPage() {
     try {
       let targetClientId = formData.client_id;
 
-      // Auto-create a client if none exists
+      // Auto-create a client with unique credentials if none exists
       if (!targetClientId) {
         const defaultName = formData.name ? `${formData.name} Host` : 'Default Event Host';
+        const creds = await generateUniqueClientCredentials(supabase, defaultName);
+
         const { data: autoClient, error: autoErr } = await (supabase.from('clients') as any)
           .insert({
             name: defaultName,
-            notes: 'Auto-created during event creation',
+            contact_email: creds.email,
+            notes: `Password: ${creds.password} | Auto-created during event creation`,
           })
           .select()
           .single();
