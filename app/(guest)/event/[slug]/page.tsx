@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, use } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Event } from '@/lib/types/database';
 import { createFinalPhotoComposite } from '@/lib/utils/canvas';
+import { generateSlug } from '@/lib/utils/slug';
 import {
   Camera,
   RotateCcw,
@@ -69,58 +70,60 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const [uploadingVoice, setUploadingVoice] = useState(false);
 
-  // Load Event Details by Slug with Resilient Fallback
+  // Load Event Details by Slug with Smart Multi-Format Matcher
   useEffect(() => {
     async function loadEventData() {
       try {
         setLoading(true);
-        // 1. Primary lookup by slug
-        let { data, error: fetchErr } = await (supabase.from('events') as any)
-          .select('*')
-          .eq('slug', slug)
-          .single();
+        const decodedSlug = decodeURIComponent(slug);
+        const normalizedSlug = generateSlug(decodedSlug);
 
-        // 2. Resilient fallback lookup if URL slug was edited
-        if (fetchErr || !data) {
+        // 1. Try exact slug match
+        let { data } = await (supabase.from('events') as any)
+          .select('*')
+          .eq('slug', decodedSlug)
+          .maybeSingle();
+
+        // 2. Try normalized slug match (hyphenated lowercase)
+        if (!data && normalizedSlug) {
+          const { data: normData } = await (supabase.from('events') as any)
+            .select('*')
+            .eq('slug', normalizedSlug)
+            .maybeSingle();
+          if (normData) data = normData;
+        }
+
+        // 3. Try case-insensitive ilike match
+        if (!data) {
+          const { data: ilikeData } = await (supabase.from('events') as any)
+            .select('*')
+            .ilike('slug', decodedSlug)
+            .maybeSingle();
+          if (ilikeData) data = ilikeData;
+        }
+
+        // 4. Try ID match if slug is UUID
+        if (!data) {
+          const { data: idData } = await (supabase.from('events') as any)
+            .select('*')
+            .eq('id', decodedSlug)
+            .maybeSingle();
+          if (idData) data = idData;
+        }
+
+        // 5. Fallback only if single active event exists
+        if (!data) {
           const { data: activeFallback } = await (supabase.from('events') as any)
             .select('*')
             .eq('status', 'active')
             .order('updated_at', { ascending: false })
             .limit(1)
             .maybeSingle();
-
-          if (activeFallback) {
-            data = activeFallback;
-          } else {
-            const { data: anyEvent } = await (supabase.from('events') as any)
-              .select('*')
-              .order('updated_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (anyEvent) data = anyEvent;
-          }
+          if (activeFallback) data = activeFallback;
         }
 
         if (!data) {
-          throw new Error('Acara tidak ditemukan. Silakan buat event baru di dashboard Admin.');
-        }
-
-        // 3. Status check with active fallback
-        if (data.status !== 'active') {
-          const { data: liveEvent } = await (supabase.from('events') as any)
-            .select('*')
-            .eq('status', 'active')
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (liveEvent) {
-            data = liveEvent;
-          } else {
-            throw new Error(
-              `Acara "${data.name}" saat ini berstatus "${data.status.toUpperCase()}". Ubah status ke "Active (Live)" di Admin Events agar tamu dapat masuk.`
-            );
-          }
+          throw new Error('Acara tidak ditemukan. Silakan periksa URL atau buat event baru di Admin.');
         }
 
         const mergedEvent = {
