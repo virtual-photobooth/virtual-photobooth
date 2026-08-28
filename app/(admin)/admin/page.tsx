@@ -33,45 +33,12 @@ export default function AdminDashboardPage() {
     async function loadDashboardData() {
       try {
         setLoading(true);
+        const res = await fetch('/api/admin/stats');
+        const data = await res.json();
 
-        const [
-          { count: totalEvents },
-          { count: activeEvents },
-          { count: totalClients },
-          { count: totalGuests },
-          { count: totalPhotos },
-          { count: totalVoiceMessages },
-          { data: eventsData },
-        ] = await Promise.all([
-          supabase.from('events').select('*', { count: 'exact', head: true }),
-          supabase.from('events').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-          supabase.from('clients').select('*', { count: 'exact', head: true }),
-          supabase.from('guests').select('*', { count: 'exact', head: true }),
-          supabase.from('photos').select('*', { count: 'exact', head: true }),
-          supabase.from('voice_messages').select('*', { count: 'exact', head: true }),
-          (supabase.from('events') as any)
-            .select('*, client:clients(name)')
-            .order('created_at', { ascending: false })
-            .limit(5),
-        ]);
-
-        const estimatedGb = (
-          ((totalPhotos || 0) * 1.5 + (totalVoiceMessages || 0) * 0.4) /
-          1024
-        ).toFixed(2);
-
-        setStats({
-          totalEvents: totalEvents || 0,
-          activeEvents: activeEvents || 0,
-          totalClients: totalClients || 0,
-          totalGuests: totalGuests || 0,
-          totalPhotos: totalPhotos || 0,
-          totalVoiceMessages: totalVoiceMessages || 0,
-          storageUsageGb: estimatedGb,
-        });
-
-        if (eventsData) {
-          setRecentEvents(eventsData);
+        if (res.ok && data?.success) {
+          if (data.stats) setStats(data.stats);
+          if (data.recentEvents) setRecentEvents(data.recentEvents);
         }
       } catch (err) {
         console.error('Error fetching dashboard stats:', err);
@@ -81,7 +48,7 @@ export default function AdminDashboardPage() {
     }
 
     loadDashboardData();
-  }, [supabase]);
+  }, []);
 
   const cards = [
     { label: 'Total Clients', value: stats.totalClients, icon: Users, accent: 'bg-emerald-50 text-emerald-600' },
