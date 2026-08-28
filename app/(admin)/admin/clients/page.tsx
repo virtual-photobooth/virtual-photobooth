@@ -34,13 +34,12 @@ export default function ClientsPage() {
   async function fetchClients() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const res = await fetch('/api/admin/clients');
+      const data = await res.json();
 
-      if (error) throw error;
-      if (data) setClients(data);
+      if (data?.clients) {
+        setClients(data.clients);
+      }
     } catch (err) {
       console.error('Error fetching clients:', err);
     } finally {
@@ -69,41 +68,21 @@ export default function ClientsPage() {
     setSaving(true);
 
     try {
-      if (editingClient) {
-        // Update existing
-        const { error } = await (supabase.from('clients') as any)
-          .update({
-            name: formData.name,
-            contact_email: formData.contact_email || null,
-            contact_phone: formData.contact_phone || null,
-            notes: formData.notes || null,
-          })
-          .eq('id', editingClient.id);
-
-        if (error) throw error;
-      } else {
-        // Insert new with unique credentials
-        let clientEmail = formData.contact_email?.trim().toLowerCase();
-        let generatedPass = '';
-
-        if (!clientEmail) {
-          const creds = await generateUniqueClientCredentials(supabase, formData.name);
-          clientEmail = creds.email;
-          generatedPass = creds.password;
-        } else {
-          generatedPass = generateUniquePassword(formData.name);
-        }
-
-        const notesContent = `Password: ${generatedPass}${formData.notes ? ` | ${formData.notes}` : ''}`;
-
-        const { error } = await (supabase.from('clients') as any).insert({
+      const res = await fetch('/api/admin/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingClient?.id,
           name: formData.name,
-          contact_email: clientEmail,
-          contact_phone: formData.contact_phone || null,
-          notes: notesContent,
-        });
+          contact_email: formData.contact_email,
+          contact_phone: formData.contact_phone,
+          notes: formData.notes,
+        }),
+      });
 
-        if (error) throw error;
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.message || 'Failed to save client');
       }
 
       setModalOpen(false);
@@ -121,11 +100,14 @@ export default function ClientsPage() {
     try {
       setIsDeleting(true);
 
-      const { error } = await (supabase.from('clients') as any)
-        .delete()
-        .eq('id', deleteTarget.id);
+      const res = await fetch(`/api/admin/clients?id=${deleteTarget.id}`, {
+        method: 'DELETE',
+      });
 
-      if (error) throw error;
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.message || 'Gagal menghapus client');
+      }
 
       setDeleteTarget(null);
       fetchClients();
