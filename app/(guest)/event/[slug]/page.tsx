@@ -628,22 +628,22 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
 
       {/* STEP 2: CAMERA VIEW & COUNTDOWN */}
       {step === 2 && (
-        <div className="flex-1 flex flex-col justify-between items-center relative animate-fade-in">
+        <div className="flex-1 flex flex-col justify-between items-center relative animate-fade-in w-full max-h-[100dvh] overflow-hidden py-1 px-1">
           {/* Fullscreen White Screen Flash Effect */}
           {screenFlash && (
-            <div className="fixed inset-0 bg-white z-[999] pointer-events-none animate-pulse transition-opacity duration-100" />
+            <div className="fixed inset-0 bg-white z-[9999] pointer-events-none animate-pulse transition-opacity duration-150" />
           )}
 
-          {/* Elegant Top Header Controls */}
-          <div className="w-full flex items-center justify-between z-20 pb-4 px-1">
-            {/* Flash Button */}
+          {/* Top Controls Header (100% Visible on Mobile) */}
+          <div className="w-full flex items-center justify-between z-20 pb-2 px-1 pt-1 shrink-0">
+            {/* Flash Toggle Button */}
             <button
               onClick={toggleFlash}
               disabled={capturing}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg transition-all border cursor-pointer active:scale-95 ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-md transition-all border cursor-pointer active:scale-95 ${
                 flashEnabled
-                  ? 'bg-[#2C2A29] text-[#F59E0B] border-[#F59E0B]/60 shadow-[0_0_15px_rgba(245,158,11,0.35)]'
-                  : 'bg-[#2C2A29]/80 backdrop-blur-md text-white/80 border-[#E2D9CC]/30 hover:bg-[#1A1817]'
+                  ? 'bg-[#2C2A29] text-[#F59E0B] border-[#F59E0B] shadow-[0_0_15px_rgba(245,158,11,0.5)]'
+                  : 'bg-[#2C2A29]/90 backdrop-blur-md text-white/90 border-[#E2D9CC]/30 hover:bg-[#1A1817]'
               }`}
             >
               {flashEnabled ? (
@@ -653,34 +653,40 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
                 </>
               ) : (
                 <>
-                  <ZapOff className="w-3.5 h-3.5 text-white/60" />
+                  <ZapOff className="w-3.5 h-3.5 text-white/70" />
                   <span>Flash OFF</span>
                 </>
               )}
             </button>
 
-            {/* Photo Counter Progress Badge */}
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[#8C6D46] bg-[#F4EFE6] px-3 py-1 rounded-full border border-[#E2D9CC] shadow-xs">
+            {/* Photo Counter Badge */}
+            <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#8C6D46] bg-[#F4EFE6] px-3 py-1 rounded-full border border-[#E2D9CC] shadow-xs">
               {capturing
                 ? `Foto ${currentPhotoIndex} / ${event.photo_count}`
                 : `Progress ${capturedSnapshots.length} / ${event.photo_count}`}
             </div>
 
-            {/* Elegant Camera Flip Button */}
+            {/* Camera Flip Button */}
             <button
               onClick={toggleCameraFacing}
               disabled={capturing}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#2C2A29]/90 backdrop-blur-md text-white hover:bg-[#1A1817] text-xs font-semibold shadow-xl transition-all disabled:opacity-40 cursor-pointer active:scale-95 border border-[#D4A373]/40 hover:border-[#D4A373]"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#2C2A29]/90 backdrop-blur-md text-white hover:bg-[#1A1817] text-xs font-semibold shadow-md transition-all disabled:opacity-40 cursor-pointer active:scale-95 border border-[#D4A373]/40"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-[#D4A373] transition-transform duration-500 hover:rotate-180" />
+              <RefreshCw className="w-3.5 h-3.5 text-[#D4A373]" />
               <span className="tracking-wide">
                 {facingMode === 'user' ? 'Kamera Depan' : 'Kamera Belakang'}
               </span>
             </button>
           </div>
 
-          {/* Video Preview Container (Portrait Aspect 3:4) */}
-          <div className="w-full relative aspect-[3/4] rounded-3xl bg-[#1A1817] overflow-hidden shadow-2xl border-2 border-[#E2D9CC]">
+          {/* Video Preview Container (Dynamically Scaled to fit Mobile Viewport) */}
+          <div
+            className={`w-full max-w-sm aspect-[3/4] max-h-[46vh] sm:max-h-[52vh] rounded-3xl overflow-hidden relative shadow-2xl border-2 transition-all shrink-1 my-auto ${
+              flashEnabled
+                ? 'border-amber-300 ring-8 ring-amber-200/60 shadow-[0_0_50px_rgba(251,191,36,0.5)] bg-amber-50'
+                : 'border-[#E2D9CC] bg-[#1A1817]'
+            }`}
+          >
             <video
               ref={videoRef}
               playsInline
@@ -696,20 +702,20 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
                 <div className="text-white font-serif font-extrabold text-7xl sm:text-8xl animate-ping-once drop-shadow-2xl">
                   {countdown === 0 ? '📸' : countdown}
                 </div>
-                <p className="text-white/80 text-xs tracking-widest uppercase mt-4 font-semibold">
-                  {countdown === 0 ? 'CAPTURlNG...' : 'GET READY...'}
+                <p className="text-white/90 text-xs tracking-widest uppercase mt-4 font-semibold">
+                  {countdown === 0 ? 'SENYUM...' : 'GET READY...'}
                 </p>
               </div>
             )}
           </div>
 
-          {/* Bottom Shutter Controls & Photo Progress */}
-          <div className="w-full pt-4 flex flex-col items-center gap-3 z-20">
+          {/* Bottom Shutter Controls & Photo Progress (Always Visible above Mobile Bar) */}
+          <div className="w-full pt-2 pb-1 flex flex-col items-center gap-2 z-20 shrink-0">
             {/* Captured Photos Progress Bar / Thumbnails */}
-            <div className="flex items-center justify-center gap-2.5 mb-1">
+            <div className="flex items-center justify-center gap-2 mb-0.5">
               {Array.from({ length: event.photo_count || 4 }).map((_, idx) => {
                 const capturedSrc = capturedSnapshots[idx];
-                const isCurrent = currentPhotoIndex === idx + 1;
+                const isCurrent = capturedSnapshots.length === idx;
                 return (
                   <div
                     key={idx}
@@ -718,11 +724,11 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
                         handleRetakePhotoSlot(idx);
                       }
                     }}
-                    className={`relative w-12 h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                    className={`relative w-11 h-13 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
                       capturedSrc
                         ? 'border-emerald-600 shadow-sm'
                         : isCurrent
-                        ? 'border-[#8C6D46] bg-[#F4EFE6] animate-pulse'
+                        ? 'border-[#8C6D46] bg-[#F4EFE6] animate-pulse ring-2 ring-[#8C6D46]/40'
                         : 'border-[#E2D9CC] bg-[#E5DFD5]'
                     }`}
                   >
@@ -745,23 +751,23 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
 
             {/* Shutter Button & Action Controls */}
             {capturing ? (
-              <div className="text-xs font-semibold text-[#8C6D46] tracking-wider uppercase animate-pulse py-3">
-                Memfoto Gambar Ke-{currentPhotoIndex}...
+              <div className="text-xs font-semibold text-[#8C6D46] tracking-wider uppercase animate-pulse py-2">
+                Memfoto Gambar Ke-{capturedSnapshots.length + 1}...
               </div>
             ) : capturedSnapshots.length < event.photo_count ? (
-              <div className="flex flex-col items-center gap-2.5 w-full">
+              <div className="flex flex-col items-center gap-1.5 w-full max-w-sm px-2">
                 <button
                   onClick={handleCaptureSinglePhoto}
-                  className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-semibold text-xs tracking-wider uppercase shadow-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-95 border border-[#423E3C]"
+                  className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-bold text-xs tracking-wider uppercase shadow-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-95 border border-[#423E3C] ring-4 ring-[#8C6D46]/20 animate-pulse"
                 >
                   <Camera className="w-4 h-4 text-[#D4A373]" />
-                  <span>Ambil Foto Ke-{currentPhotoIndex}</span>
+                  <span>Ambil Foto Ke-{capturedSnapshots.length + 1}</span>
                 </button>
 
                 {capturedSnapshots.length > 0 && (
                   <button
                     onClick={() => handleRetakePhotoSlot(capturedSnapshots.length - 1)}
-                    className="text-xs font-medium text-[#78716C] hover:text-[#2C2A29] underline transition-colors cursor-pointer py-1 flex items-center gap-1"
+                    className="text-[11px] font-semibold text-[#78716C] hover:text-[#2C2A29] underline transition-colors cursor-pointer py-0.5 flex items-center gap-1"
                   >
                     <RotateCcw className="w-3 h-3" />
                     <span>Ulangi Foto Ke-{capturedSnapshots.length}</span>
@@ -769,10 +775,10 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
                 )}
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2.5 w-full">
+              <div className="flex flex-col items-center gap-1.5 w-full max-w-sm px-2">
                 <button
                   onClick={handleProceedToComposite}
-                  className="w-full py-4 px-6 rounded-full bg-gradient-to-r from-[#2C2A29] to-[#423E3C] hover:from-[#1A1817] hover:to-[#2C2A29] text-white font-bold text-xs tracking-widest uppercase shadow-2xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#D4A373]/40"
+                  className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-[#2C2A29] to-[#423E3C] hover:from-[#1A1817] hover:to-[#2C2A29] text-white font-bold text-xs tracking-widest uppercase shadow-2xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#D4A373]/40"
                 >
                   <Sparkles className="w-4 h-4 text-[#D4A373] animate-spin" />
                   <span>Proses & Lihat Hasil Bingkai</span>
@@ -780,7 +786,7 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
 
                 <button
                   onClick={() => handleRetakePhotoSlot(capturedSnapshots.length - 1)}
-                  className="text-xs font-medium text-[#78716C] hover:text-[#2C2A29] underline transition-colors cursor-pointer py-1 flex items-center gap-1"
+                  className="text-[11px] font-semibold text-[#78716C] hover:text-[#2C2A29] underline transition-colors cursor-pointer py-0.5 flex items-center gap-1"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>Foto Ulang Jepretan Terakhir</span>
