@@ -38,62 +38,93 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     )
   );
 
-  // Calculate layout grid based on photo count (default 4 photos = 2x2 grid or vertical strip)
+  // Load custom PNG frame first if available (to auto-detect cutout windows)
+  let frameImg: HTMLImageElement | null = null;
+  if (frameImageUrl) {
+    try {
+      frameImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = frameImageUrl;
+      });
+    } catch (e) {
+      console.warn('Could not pre-load frame image:', e);
+    }
+  }
+
+  // Calculate layout grid based on photo count with non-overlapping inset bounds
   let slots: Array<{ x: number; y: number; w: number; h: number }> = [];
 
-  if (photoCount === 4) {
-    // 2x2 Grid with margins
-    const paddingX = 120;
-    const paddingTop = 400;
-    const gap = 60;
-    const cellW = (canvasWidth - paddingX * 2 - gap) / 2;
-    const cellH = (cellW * 3) / 4; // 4:3 landscape ratio per photo slot
+  // Attempt auto-detecting transparent cutout windows from PNG frame
+  if (frameImg) {
+    const autoCutouts = detectCutoutWindows(frameImg, canvasWidth, canvasHeight, photoCount);
+    if (autoCutouts && autoCutouts.length === photoCount) {
+      slots = autoCutouts;
+    }
+  }
 
-    slots = [
-      { x: paddingX, y: paddingTop, w: cellW, h: cellH },
-      { x: paddingX + cellW + gap, y: paddingTop, w: cellW, h: cellH },
-      { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
-      { x: paddingX + cellW + gap, y: paddingTop + cellH + gap, w: cellW, h: cellH },
-    ];
-  } else if (photoCount === 3) {
-    // Vertical 3-strip
-    const paddingX = 160;
-    const paddingTop = 360;
-    const gap = 50;
-    const cellW = canvasWidth - paddingX * 2;
-    const cellH = (canvasHeight - paddingTop - 500 - gap * 2) / 3;
+  // Fallback to precision non-overlapping inset slots if auto-detect is unavailable
+  if (slots.length === 0) {
+    if (photoCount === 4) {
+      // 2x2 Grid with clean margins & gap
+      const paddingX = 120;
+      const paddingTop = 360;
+      const gap = 50;
+      const cellW = (canvasWidth - paddingX * 2 - gap) / 2;
+      const cellH = 1150;
 
-    slots = [
-      { x: paddingX, y: paddingTop, w: cellW, h: cellH },
-      { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
-      { x: paddingX, y: paddingTop + (cellH + gap) * 2, w: cellW, h: cellH },
-    ];
-  } else if (photoCount === 2) {
-    // 2-Photo Full Bleed Layout (100% Zero-Gap Masking for 2-cutout template overlays like @memoriephotobooth_)
-    // Slot 1 covers y: 0 to 1420 (bleeding behind middle bar). Slot 2 covers y: 1390 to 2740 (bleeding behind middle bar & floral footer).
-    slots = [
-      { x: 0, y: 0, w: canvasWidth, h: 1420 },
-      { x: 0, y: 1390, w: canvasWidth, h: 1350 },
-    ];
-  } else {
-    // Default grid math for N photos
-    const cols = photoCount > 2 ? 2 : 1;
-    const rows = Math.ceil(photoCount / cols);
-    const paddingX = 120;
-    const paddingTop = 400;
-    const gap = 50;
-    const cellW = (canvasWidth - paddingX * 2 - gap * (cols - 1)) / cols;
-    const cellH = (canvasHeight - paddingTop - 450 - gap * (rows - 1)) / rows;
+      slots = [
+        { x: paddingX, y: paddingTop, w: cellW, h: cellH },
+        { x: paddingX + cellW + gap, y: paddingTop, w: cellW, h: cellH },
+        { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
+        { x: paddingX + cellW + gap, y: paddingTop + cellH + gap, w: cellW, h: cellH },
+      ];
+    } else if (photoCount === 3) {
+      // Vertical 3-strip with clean gaps
+      const paddingX = 160;
+      const paddingTop = 280;
+      const gap = 50;
+      const cellW = canvasWidth - paddingX * 2;
+      const cellH = 780;
 
-    for (let i = 0; i < photoCount; i++) {
-      const r = Math.floor(i / cols);
-      const c = i % cols;
-      slots.push({
-        x: paddingX + c * (cellW + gap),
-        y: paddingTop + r * (cellH + gap),
-        w: cellW,
-        h: cellH,
-      });
+      slots = [
+        { x: paddingX, y: paddingTop, w: cellW, h: cellH },
+        { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
+        { x: paddingX, y: paddingTop + (cellH + gap) * 2, w: cellW, h: cellH },
+      ];
+    } else if (photoCount === 2) {
+      // 2-Photo Precision Inset Layout (Top & Bottom slots separated by 260px middle gap for text/logos)
+      // Top Slot: y: 260 to 1410. Middle Gap: 1410 to 1670 (reserved for "Anniversary 14"). Bottom Slot: 1670 to 2820.
+      const paddingX = 140;
+      const cellW = canvasWidth - paddingX * 2;
+      const cellH = 1150;
+
+      slots = [
+        { x: paddingX, y: 260, w: cellW, h: cellH },
+        { x: paddingX, y: 1670, w: cellW, h: cellH },
+      ];
+    } else {
+      // Default grid math for N photos
+      const cols = photoCount > 2 ? 2 : 1;
+      const rows = Math.ceil(photoCount / cols);
+      const paddingX = 120;
+      const paddingTop = 360;
+      const gap = 50;
+      const cellW = (canvasWidth - paddingX * 2 - gap * (cols - 1)) / cols;
+      const cellH = (canvasHeight - paddingTop - 450 - gap * (rows - 1)) / rows;
+
+      for (let i = 0; i < photoCount; i++) {
+        const r = Math.floor(i / cols);
+        const c = i % cols;
+        slots.push({
+          x: paddingX + c * (cellW + gap),
+          y: paddingTop + r * (cellH + gap),
+          w: cellW,
+          h: cellH,
+        });
+      }
     }
   }
 
@@ -127,24 +158,10 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     ctx.restore();
   });
 
-  // If a custom PNG frame is provided, overlay it on top!
-  if (frameImageUrl) {
-    try {
-      const frameImg = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = frameImageUrl;
-      });
-
-      ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
-    } catch (e) {
-      console.warn('Failed to load custom PNG frame, using fallback template text:', e);
-      drawDefaultBranding(ctx, canvasWidth, canvasHeight, eventName, eventDate);
-    }
-  } else {
-    // Draw default editorial branding text & border at bottom
+  // Draw custom PNG frame overlay on top
+  if (frameImg) {
+    ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
+  } else if (!frameImageUrl) {
     drawDefaultBranding(ctx, canvasWidth, canvasHeight, eventName, eventDate);
   }
 
@@ -173,4 +190,87 @@ function drawDefaultBranding(
   ctx.fillStyle = '#78716C';
   ctx.font = '500 48px sans-serif';
   ctx.fillText(eventDate, canvasWidth / 2, bottomY + 80);
+}
+
+function detectCutoutWindows(
+  frameImg: HTMLImageElement,
+  width: number,
+  height: number,
+  expectedCount: number
+): Array<{ x: number; y: number; w: number; h: number }> | null {
+  try {
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = width;
+    offCanvas.height = height;
+    const offCtx = offCanvas.getContext('2d');
+    if (!offCtx) return null;
+
+    offCtx.drawImage(frameImg, 0, 0, width, height);
+    const imgData = offCtx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+
+    const isTransparentRow = new Array(height);
+    for (let y = 0; y < height; y++) {
+      let transparentCount = 0;
+      const samples = 20;
+      for (let s = 0; s < samples; s++) {
+        const x = Math.floor(width * 0.25 + (width * 0.5 * s) / samples);
+        const alpha = data[(y * width + x) * 4 + 3];
+        if (alpha < 100) transparentCount++;
+      }
+      isTransparentRow[y] = transparentCount > samples * 0.5;
+    }
+
+    const yRanges: Array<{ yMin: number; yMax: number }> = [];
+    let inRange = false;
+    let startY = 0;
+
+    for (let y = 0; y < height; y++) {
+      if (isTransparentRow[y] && !inRange) {
+        inRange = true;
+        startY = y;
+      } else if (!isTransparentRow[y] && inRange) {
+        inRange = false;
+        if (y - startY > 150) {
+          yRanges.push({ yMin: startY, yMax: y });
+        }
+      }
+    }
+    if (inRange && height - startY > 150) {
+      yRanges.push({ yMin: startY, yMax: height });
+    }
+
+    if (yRanges.length === expectedCount) {
+      const detected: Array<{ x: number; y: number; w: number; h: number }> = [];
+      for (const r of yRanges) {
+        const midY = Math.floor((r.yMin + r.yMax) / 2);
+        let xMin = width;
+        let xMax = 0;
+
+        for (let x = 0; x < width; x += 5) {
+          const alpha = data[(midY * width + x) * 4 + 3];
+          if (alpha < 100) {
+            if (x < xMin) xMin = x;
+            if (x > xMax) xMax = x;
+          }
+        }
+
+        if (xMin < xMax && xMax - xMin > 200) {
+          detected.push({
+            x: xMin,
+            y: r.yMin,
+            w: xMax - xMin,
+            h: r.yMax - r.yMin,
+          });
+        }
+      }
+
+      if (detected.length === expectedCount) {
+        return detected;
+      }
+    }
+  } catch (e) {
+    console.warn('Auto cutout detection skipped:', e);
+  }
+  return null;
 }
