@@ -45,13 +45,10 @@ export async function getClientScope(supabase: SupabaseClient): Promise<ClientSc
     const { data: clientsData } = await query;
 
     if (!clientsData || clientsData.length === 0) {
-      // Fallback: If no client record yet, try querying events (Rely on RLS)
-      const { data: fallbackEvents } = await (supabase.from('events') as any).select('*');
-      const events = (fallbackEvents as Event[]) || [];
       return {
         client: null,
-        events,
-        eventIds: events.map((e) => e.id),
+        events: [],
+        eventIds: [],
       };
     }
 
