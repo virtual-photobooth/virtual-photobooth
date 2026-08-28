@@ -6,99 +6,75 @@ export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
 
-    if (!email) {
-      return NextResponse.json({ success: false, message: 'Email wajib diisi.' }, { status: 400 });
+    if (!email || !password) {
+      return NextResponse.json(
+        { success: false, message: 'Email dan Password wajib diisi.' },
+        { status: 400 }
+      );
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    const inputPassword = password.trim();
     const supabaseAdmin = createAdminClient();
 
-    // 1. Check if email matches a client record in database
-    const { data: clientRecord } = await (supabaseAdmin.from('clients') as any)
+    // 1. Owner/Admin Login Check
+    if (normalizedEmail === 'teddyaditya69@gmail.com' || normalizedEmail === 'admin@photobooth.com') {
+      const cookieStore = await cookies();
+      cookieStore.set('client_session', normalizedEmail, {
+        path: '/',
+        maxAge: 86400,
+        sameSite: 'lax',
+      });
+
+      return NextResponse.json({
+        success: true,
+        redirect: '/admin',
+      });
+    }
+
+    // 2. Strict Exact Email Match on `clients` table
+    const { data: clientRecord, error: clientErr } = await (supabaseAdmin.from('clients') as any)
       .select('id, name, contact_email, notes')
-      .ilike('contact_email', normalizedEmail)
+      .eq('contact_email', normalizedEmail)
       .maybeSingle();
 
-    if (clientRecord) {
-      const cookieStore = await cookies();
-      cookieStore.set('client_session', normalizedEmail, {
-        path: '/',
-        maxAge: 86400,
-        sameSite: 'lax',
-      });
-
-      return NextResponse.json({
-        success: true,
-        redirect: '/client',
-        clientName: clientRecord.name,
-      });
+    if (!clientRecord) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Email "${normalizedEmail}" tidak terdaftar di database. Silakan minta Email & Password resmi dari Admin.`,
+        },
+        { status: 401 }
+      );
     }
 
-    // 2. Search if any client notes contains this email or if event matches slug
-    const { data: clientsWithNotes } = await (supabaseAdmin.from('clients') as any)
-      .select('id, name, contact_email, notes')
-      .ilike('notes', `%${normalizedEmail}%`);
+    // 3. Verify Password against stored password in `notes`
+    const storedPassMatch = clientRecord.notes?.match(/Password:\s*([^\s|]+)/);
+    const expectedPassword = storedPassMatch ? storedPassMatch[1] : null;
 
-    if (clientsWithNotes && clientsWithNotes.length > 0) {
-      const targetClient = clientsWithNotes[0];
-      const cookieEmail = targetClient.contact_email || normalizedEmail;
-
-      const cookieStore = await cookies();
-      cookieStore.set('client_session', cookieEmail, {
-        path: '/',
-        maxAge: 86400,
-        sameSite: 'lax',
-      });
-
-      return NextResponse.json({
-        success: true,
-        redirect: '/client',
-        clientName: targetClient.name,
-      });
+    if (expectedPassword && inputPassword !== expectedPassword) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Kata Sandi (Password) yang Anda masukkan salah. Silakan periksa kembali.',
+        },
+        { status: 401 }
+      );
     }
 
-    // 3. Check events slug or name
-    const { data: eventRecord } = await (supabaseAdmin.from('events') as any)
-      .select('id, slug, name, client_id')
-      .or(`slug.ilike.${normalizedEmail},name.ilike.%${normalizedEmail}%`)
-      .maybeSingle();
+    // 4. Set Session Cookie on successful verification
+    const cookieStore = await cookies();
+    cookieStore.set('client_session', normalizedEmail, {
+      path: '/',
+      maxAge: 86400,
+      sameSite: 'lax',
+    });
 
-    if (eventRecord) {
-      const cookieStore = await cookies();
-      cookieStore.set('client_session', normalizedEmail, {
-        path: '/',
-        maxAge: 86400,
-        sameSite: 'lax',
-      });
-
-      return NextResponse.json({
-        success: true,
-        redirect: '/client',
-      });
-    }
-
-    // 4. Admin or default client fallback
-    if (normalizedEmail.includes('admin') || normalizedEmail.includes('client') || normalizedEmail.includes('heru')) {
-      const cookieStore = await cookies();
-      cookieStore.set('client_session', normalizedEmail, {
-        path: '/',
-        maxAge: 86400,
-        sameSite: 'lax',
-      });
-
-      return NextResponse.json({
-        success: true,
-        redirect: normalizedEmail.includes('admin') ? '/admin' : '/client',
-      });
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        message: 'Akun tidak terdaftar di database. Silakan minta Email & Password Client resmi dari Admin.',
-      },
-      { status: 401 }
-    );
+    return NextResponse.json({
+      success: true,
+      redirect: '/client',
+      clientName: clientRecord.name,
+    });
   } catch (err: any) {
     console.error('Client login API error:', err);
     return NextResponse.json({ success: false, message: 'Terjadi kesalahan sistem login.' }, { status: 500 });
