@@ -564,7 +564,9 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
   }
 
   return (
-    <div className="flex-1 flex flex-col justify-between p-6 sm:p-8 bg-[#F9F6F0] relative overflow-hidden selection:bg-[#B8926A] selection:text-white">
+    <div className={`flex-1 flex flex-col justify-between p-6 sm:p-8 relative overflow-hidden selection:bg-[#B8926A] selection:text-white transition-colors duration-300 ${
+      flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F9F6F0]'
+    }`}>
       {/* STEP 1: WELCOME SCREEN - MATCHING IMAGE 1 DESIGN */}
       {step === 1 && (
         <div className="flex-1 flex flex-col justify-between items-center text-center py-4 animate-fade-in">
@@ -630,7 +632,7 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
         <div className="flex-1 flex flex-col justify-between items-center relative animate-fade-in w-full max-h-[100dvh] overflow-hidden py-1 px-1">
           {/* Fullscreen White Screen Flash Effect */}
           {screenFlash && (
-            <div className="fixed inset-0 bg-white z-[9999] pointer-events-none animate-pulse transition-opacity duration-150" />
+            <div className="fixed inset-0 bg-white z-[99999] opacity-100 pointer-events-none animate-pulse transition-opacity duration-150" />
           )}
 
           {/* Top Controls Header (100% Visible on Mobile) */}
@@ -639,15 +641,15 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
             <button
               onClick={toggleFlash}
               disabled={capturing}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-md transition-all border cursor-pointer active:scale-95 ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-lg transition-all border cursor-pointer active:scale-95 ${
                 flashEnabled
-                  ? 'bg-[#2C2A29] text-[#F59E0B] border-[#F59E0B] shadow-[0_0_15px_rgba(245,158,11,0.5)]'
+                  ? 'bg-amber-500 text-white border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.8)] animate-pulse'
                   : 'bg-[#2C2A29]/90 backdrop-blur-md text-white/90 border-[#E2D9CC]/30 hover:bg-[#1A1817]'
               }`}
             >
               {flashEnabled ? (
                 <>
-                  <Zap className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B] animate-pulse" />
+                  <Zap className="w-4 h-4 text-white fill-white" />
                   <span>Flash ON</span>
                 </>
               ) : (
@@ -678,12 +680,12 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
             </button>
           </div>
 
-          {/* Video Preview Container (Dynamically Scaled to fit Mobile Viewport) */}
+          {/* Video Preview Container (Dynamically Scaled Studio Ring Light) */}
           <div
-            className={`w-full max-w-sm aspect-[3/4] max-h-[46vh] sm:max-h-[52vh] rounded-3xl overflow-hidden relative shadow-2xl border-2 transition-all shrink-1 my-auto ${
+            className={`w-full max-w-sm aspect-[3/4] max-h-[46vh] sm:max-h-[52vh] rounded-3xl overflow-hidden relative shadow-2xl transition-all shrink-1 my-auto ${
               flashEnabled
-                ? 'border-amber-300 ring-8 ring-amber-200/60 shadow-[0_0_50px_rgba(251,191,36,0.5)] bg-amber-50'
-                : 'border-[#E2D9CC] bg-[#1A1817]'
+                ? 'border-4 border-white ring-[16px] ring-white shadow-[0_0_100px_rgba(255,255,255,1)] bg-white'
+                : 'border-2 border-[#E2D9CC] bg-[#1A1817]'
             }`}
           >
             <video
