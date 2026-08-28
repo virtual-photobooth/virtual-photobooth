@@ -62,45 +62,41 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     const { topPad, bottomPad } = detectFramePaddings(frameImg, canvasWidth, canvasHeight);
 
     if (photoCount === 2) {
-      // 2-Photo Cutout Alignment:
-      // Slot 1: Starts at topPad (below top frame border) to y=1620 (hidden behind middle blue banner)
-      // Slot 2: Starts at y=1620 to canvasHeight - bottomPad (above bottom frame border)
-      const slot1H = 1620 - topPad;
-      const slot2H = 1620 - bottomPad;
+      // 2-Photo Full-Bleed Alignment:
+      // Slot 1 starts at y=0 (top edge of canvas) to y=1620 (hidden behind middle blue banner)
+      // Slot 2 starts at y=1620 to y=3240 (bottom edge of canvas)
+      // Zero black gap at top or bottom, zero frame drop!
       slots = [
-        { x: 0, y: topPad, w: canvasWidth, h: slot1H },
-        { x: 0, y: 1620, w: canvasWidth, h: slot2H },
+        { x: 0, y: 0, w: canvasWidth, h: 1620 },
+        { x: 0, y: 1620, w: canvasWidth, h: 1620 },
       ];
     } else if (photoCount === 3) {
-      const availableH = canvasHeight - topPad - bottomPad;
-      const h3 = availableH / 3;
+      const h3 = canvasHeight / 3;
       slots = [
-        { x: 0, y: topPad, w: canvasWidth, h: h3 },
-        { x: 0, y: topPad + h3, w: canvasWidth, h: h3 },
-        { x: 0, y: topPad + h3 * 2, w: canvasWidth, h: h3 },
+        { x: 0, y: 0, w: canvasWidth, h: h3 },
+        { x: 0, y: h3, w: canvasWidth, h: h3 },
+        { x: 0, y: h3 * 2, w: canvasWidth, h: h3 },
       ];
     } else if (photoCount === 4) {
       const w2 = canvasWidth / 2;
-      const availableH = canvasHeight - topPad - bottomPad;
-      const h2 = availableH / 2;
+      const h2 = canvasHeight / 2;
       slots = [
-        { x: 0, y: topPad, w: w2, h: h2 },
-        { x: w2, y: topPad, w: w2, h: h2 },
-        { x: 0, y: topPad + h2, w: w2, h: h2 },
-        { x: w2, y: topPad + h2, w: w2, h: h2 },
+        { x: 0, y: 0, w: w2, h: h2 },
+        { x: w2, y: 0, w: w2, h: h2 },
+        { x: 0, y: h2, w: w2, h: h2 },
+        { x: w2, y: h2, w: w2, h: h2 },
       ];
     } else {
       const cols = photoCount > 2 ? 2 : 1;
       const rows = Math.ceil(photoCount / cols);
       const cellW = canvasWidth / cols;
-      const availableH = canvasHeight - topPad - bottomPad;
-      const cellH = availableH / rows;
+      const cellH = canvasHeight / rows;
       for (let i = 0; i < photoCount; i++) {
         const r = Math.floor(i / cols);
         const c = i % cols;
         slots.push({
           x: c * cellW,
-          y: topPad + r * cellH,
+          y: r * cellH,
           w: cellW,
           h: cellH,
         });

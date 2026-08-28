@@ -758,11 +758,11 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
           </div>
 
           {/* Final Composited Photo Result */}
-          <div className="w-full max-w-xs sm:max-w-sm aspect-[2/3] rounded-3xl overflow-hidden relative shadow-2xl border-4 border-white my-4 bg-[#1A1817]">
+          <div className="w-full max-w-xs sm:max-w-sm rounded-3xl overflow-hidden relative shadow-2xl border-4 border-white my-4 bg-transparent flex items-center justify-center">
             <img
               src={compositedImage}
               alt="Final Photobooth Memories"
-              className="w-full h-full object-contain"
+              className="w-full h-auto object-contain rounded-2xl"
             />
           </div>
 
