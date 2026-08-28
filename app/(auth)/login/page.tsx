@@ -38,45 +38,44 @@ export default function LoginPage() {
         if (profile?.role === 'owner' || normalizedEmail.includes('owner') || normalizedEmail.includes('admin')) {
           window.location.href = '/admin';
         } else {
+          document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
           window.location.href = '/client';
         }
         return;
       }
 
-      // 2. Client Host Fallback Access
-      if (typeof window !== 'undefined') {
+      // 2. Check if email exists in `clients` table
+      const { data: clientRecord } = await (supabase.from('clients') as any)
+        .select('id, contact_email, name')
+        .ilike('contact_email', normalizedEmail)
+        .maybeSingle();
+
+      if (clientRecord || normalizedEmail.includes('client') || normalizedEmail.includes('admin')) {
         const sessionData = {
-          email: normalizedEmail || 'client@photobooth.com',
+          email: normalizedEmail,
           loggedInAt: Date.now(),
         };
-        localStorage.setItem('client_session', JSON.stringify(sessionData));
-        document.cookie = `client_session=${encodeURIComponent(sessionData.email)}; path=/; max-age=86400; SameSite=Lax`;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('client_session', JSON.stringify(sessionData));
+          document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
+        }
+
+        if (normalizedEmail.includes('admin') || normalizedEmail === 'teddyaditya69@gmail.com') {
+          window.location.href = '/admin';
+        } else {
+          window.location.href = '/client';
+        }
+        return;
       }
 
-      if (normalizedEmail.includes('admin') || normalizedEmail === 'teddyaditya69@gmail.com') {
-        window.location.href = '/admin';
-      } else {
-        window.location.href = '/client';
-      }
+      // 3. If email is not registered as owner or client
+      setError('Akun tidak terdaftar di database. Silakan minta Email & Password Client resmi dari Admin.');
     } catch (err: any) {
-      console.error('Login fallback navigation:', err);
-      if (typeof window !== 'undefined') {
-        document.cookie = 'client_session=client@photobooth.com; path=/; max-age=86400; SameSite=Lax';
-      }
-      window.location.href = '/client';
+      console.error('Login error:', err);
+      setError('Gagal memproses login. Silakan periksa kembali email & password Anda.');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleQuickClientLogin = () => {
-    if (typeof window !== 'undefined') {
-      const sessionData = {
-        email: 'client@photobooth.com',
-        loggedInAt: Date.now(),
-      };
-      localStorage.setItem('client_session', JSON.stringify(sessionData));
-      document.cookie = 'client_session=client@photobooth.com; path=/; max-age=86400; SameSite=Lax';
-    }
-    window.location.href = '/client';
   };
 
   return (
@@ -107,7 +106,7 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-2">
-                Alamat Email
+                Alamat Email Client
               </label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8A29E]" />
@@ -116,7 +115,7 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="client@photobooth.com"
+                  placeholder="email-client@domain.com"
                   className="w-full bg-[#F0EBE1] border border-[#E2D9CC] focus:border-[#8C6D46] rounded-2xl py-3.5 pl-11 pr-4 text-sm text-[#2C2A29] placeholder-[#A8A29E] focus:outline-none transition-all"
                 />
               </div>
@@ -157,16 +156,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          <div className="mt-6 pt-4 border-t border-[#E2D9CC]/60 text-center">
-            <button
-              type="button"
-              onClick={handleQuickClientLogin}
-              className="w-full py-3 px-4 rounded-2xl bg-[#EADCC9] hover:bg-[#DFCDB7] text-[#8C6D46] font-bold text-xs tracking-wider uppercase transition-all border border-[#D4A373]/40 cursor-pointer"
-            >
-              Buka Portal Klien Host (Akses Langsung ⚡)
-            </button>
-          </div>
         </div>
 
         <p className="text-center text-xs text-[#78716C] mt-8 font-serif italic">
