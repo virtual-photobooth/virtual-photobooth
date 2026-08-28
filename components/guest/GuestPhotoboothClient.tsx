@@ -341,29 +341,49 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
     }
   };
 
-  // Voice Note Recording Handlers
+  const [recordedMimeType, setRecordedMimeType] = useState<string>('audio/mp4');
+
+  // Voice Note Recording Handlers with Cross-Platform iOS Safari Compatibility
   const startVoiceRecording = async () => {
     try {
       audioChunksRef.current = [];
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+
+      // Detect supported MIME type (iOS Safari requires audio/mp4 or audio/aac)
+      let selectedMimeType = 'audio/webm';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          selectedMimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+          selectedMimeType = 'audio/aac';
+        } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          selectedMimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          selectedMimeType = 'audio/webm';
+        }
+      }
+
+      setRecordedMimeType(selectedMimeType);
+
+      const options: MediaRecorderOptions = selectedMimeType ? { mimeType: selectedMimeType } : {};
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
+        if (e.data && e.data.size > 0) {
           audioChunksRef.current.push(e.data);
         }
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
         setVoiceBlob(audioBlob);
         const url = URL.createObjectURL(audioBlob);
         setVoiceAudioUrl(url);
         stream.getTracks().forEach((track) => track.stop());
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(200);
       setRecordingVoice(true);
       setRecordingTime(0);
 
@@ -391,19 +411,30 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
     }
   };
 
-  const togglePlayVoice = () => {
+  const togglePlayVoice = async () => {
     if (!voiceAudioUrl) return;
-    if (!audioPlayerRef.current) {
-      audioPlayerRef.current = new Audio(voiceAudioUrl);
-      audioPlayerRef.current.onended = () => setIsPlayingAudio(false);
-    }
 
-    if (isPlayingAudio) {
-      audioPlayerRef.current.pause();
+    try {
+      if (!audioPlayerRef.current || audioPlayerRef.current.src !== voiceAudioUrl) {
+        const audio = new Audio(voiceAudioUrl);
+        audio.onended = () => setIsPlayingAudio(false);
+        audio.onerror = (e) => {
+          console.error('Audio playback error:', e);
+          setIsPlayingAudio(false);
+        };
+        audioPlayerRef.current = audio;
+      }
+
+      if (isPlayingAudio) {
+        audioPlayerRef.current.pause();
+        setIsPlayingAudio(false);
+      } else {
+        await audioPlayerRef.current.play();
+        setIsPlayingAudio(true);
+      }
+    } catch (e) {
+      console.error('Audio play error:', e);
       setIsPlayingAudio(false);
-    } else {
-      audioPlayerRef.current.play();
-      setIsPlayingAudio(true);
     }
   };
 
@@ -434,15 +465,17 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
         }
       }
 
-      // 2. Upload Voice Audio to Supabase Storage
+      // 2. Upload Voice Audio to Supabase Storage with dynamic MIME extension
       if (voiceBlob) {
+        const isMp4 = recordedMimeType.includes('mp4') || recordedMimeType.includes('aac');
+        const ext = isMp4 ? 'm4a' : 'webm';
         const voicePath = `events/${event.id}/voices/voice_${Date.now()}_${Math.random()
           .toString(36)
-          .substring(7)}.webm`;
+          .substring(7)}.${ext}`;
 
         const { error: uploadVoiceErr } = await supabase.storage
           .from('virtual-photobooth')
-          .upload(voicePath, voiceBlob, { contentType: 'audio/webm' });
+          .upload(voicePath, voiceBlob, { contentType: recordedMimeType || 'audio/mp4' });
 
         if (!uploadVoiceErr) {
           const { data: vUrlData } = supabase.storage
