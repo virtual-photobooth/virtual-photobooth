@@ -52,24 +52,40 @@ export default function PrintableQrModal({
       ctx.lineWidth = 4;
       ctx.strokeRect(80, 80, canvas.width - 160, canvas.height - 160);
 
-      // Top Monogram Initials
+      // Top Monogram Initials & Vertical Layout Setup
       const cleanMonogram = monogram && monogram !== 'WE' && monogram !== 'C | B' ? monogram.trim() : '';
+      let currentY = 220;
+
       if (cleanMonogram.length > 0) {
         ctx.fillStyle = '#8C6D46';
-        ctx.font = 'bold 56px "Playfair Display", Georgia, serif';
+        ctx.font = 'bold 52px "Playfair Display", Georgia, serif';
         ctx.textAlign = 'center';
-        ctx.fillText(cleanMonogram, canvas.width / 2, 220);
+        ctx.fillText(cleanMonogram, canvas.width / 2, currentY);
+        currentY += 90;
+      } else {
+        currentY = 260;
       }
 
-      // Event Name
+      // Event Name with Dynamic Auto-Scaling Font Size
       ctx.fillStyle = '#2C2A29';
-      ctx.font = 'bold 64px "Playfair Display", Georgia, serif';
-      ctx.fillText(eventName.toUpperCase(), canvas.width / 2, 340);
+      let titleFontSize = 64;
+      const maxTitleWidth = canvas.width - 240; // 960px max width inside borders
+      const uppercaseName = eventName.toUpperCase();
+
+      ctx.font = `bold ${titleFontSize}px "Playfair Display", Georgia, serif`;
+      while (ctx.measureText(uppercaseName).width > maxTitleWidth && titleFontSize > 26) {
+        titleFontSize -= 3;
+        ctx.font = `bold ${titleFontSize}px "Playfair Display", Georgia, serif`;
+      }
+
+      ctx.textAlign = 'center';
+      ctx.fillText(uppercaseName, canvas.width / 2, currentY);
 
       // Event Date
       ctx.fillStyle = '#78716C';
       ctx.font = '500 36px sans-serif';
-      ctx.fillText(eventDate, canvas.width / 2, 420);
+      ctx.textAlign = 'center';
+      ctx.fillText(eventDate, canvas.width / 2, currentY + 70);
 
       // Render High-Res QR Code Image
       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(
@@ -85,9 +101,9 @@ export default function PrintableQrModal({
       });
 
       // Draw QR Image Centered
-      const qrSize = 520;
+      const qrSize = 500;
       const qrX = (canvas.width - qrSize) / 2;
-      const qrY = 500;
+      const qrY = currentY + 140;
 
       // QR White Background Card
       ctx.fillStyle = '#FFFFFF';
@@ -99,18 +115,21 @@ export default function PrintableQrModal({
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
       // Instruction Text
-      const textY = qrY + qrSize + 140;
+      const textY = qrY + qrSize + 110;
       ctx.fillStyle = '#2C2A29';
-      ctx.font = 'bold 44px sans-serif';
+      ctx.font = 'bold 40px sans-serif';
+      ctx.textAlign = 'center';
       ctx.fillText('SCAN QR CODE TO START', canvas.width / 2, textY);
 
       ctx.fillStyle = '#78716C';
-      ctx.font = '36px "Playfair Display", Georgia, italic';
-      ctx.fillText('Create a memory for our special day ♡', canvas.width / 2, textY + 70);
+      ctx.font = '34px "Playfair Display", Georgia, italic';
+      ctx.textAlign = 'center';
+      ctx.fillText('Create a memory for our special day ♡', canvas.width / 2, textY + 60);
 
       ctx.fillStyle = '#8C6D46';
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillText('VIRTUAL PHOTOBOOTH', canvas.width / 2, canvas.height - 120);
+      ctx.font = 'bold 26px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('VIRTUAL PHOTOBOOTH', canvas.width / 2, canvas.height - 110);
 
       // Trigger Download
       const dataUrl = canvas.toDataURL('image/png', 1.0);
