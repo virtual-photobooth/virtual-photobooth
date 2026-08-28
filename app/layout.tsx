@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Virtual Photobooth — Premium Event Experience",
-  description: "Abadikan kenangan foto acara spesial Anda & tinggalkan pesan suara langsung dengan bingkai eksklusif.",
+  title: "Virtual Photobooth — Modern, Minimal & Memorable",
+  description: "Abadikan kenangan foto acara spesial Anda dengan bingkai eksklusif & pesan suara ucapan.",
   metadataBase: new URL("https://virtual-photobooth-taupe.vercel.app"),
   icons: {
     icon: [
@@ -24,8 +24,8 @@ export const metadata: Metadata = {
     apple: "/apple-icon.png",
   },
   openGraph: {
-    title: "Virtual Photobooth — Premium Event Experience",
-    description: "Abadikan kenangan foto acara spesial Anda & tinggalkan pesan suara langsung dengan bingkai eksklusif.",
+    title: "Virtual Photobooth — Modern, Minimal & Memorable",
+    description: "Abadikan kenangan foto acara spesial Anda dengan bingkai eksklusif & pesan suara ucapan.",
     url: "https://virtual-photobooth-taupe.vercel.app",
     siteName: "Virtual Photobooth",
     images: [
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Virtual Photobooth Luxury Event Experience",
+        alt: "Virtual Photobooth Minimal Aesthetic Experience",
       },
     ],
     locale: "id_ID",
@@ -41,8 +41,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Virtual Photobooth — Premium Event Experience",
-    description: "Abadikan kenangan foto acara spesial Anda & tinggalkan pesan suara langsung dengan bingkai eksklusif.",
+    title: "Virtual Photobooth — Modern, Minimal & Memorable",
+    description: "Abadikan kenangan foto acara spesial Anda dengan bingkai eksklusif & pesan suara ucapan.",
     images: ["/og-image.png"],
   },
 };
