@@ -16,6 +16,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError(null);
 
@@ -28,17 +29,17 @@ export default function LoginPage() {
         password,
       });
 
-      if (!authError && data.user) {
+      if (!authError && data?.user) {
         // Fetch user profile role
         const { data: profile } = await (supabase.from('profiles') as any)
           .select('role')
           .eq('id', data.user.id)
-          .single();
+          .maybeSingle();
 
         if (profile?.role === 'owner') {
-          router.push('/admin');
+          window.location.href = '/admin';
         } else {
-          router.push('/client');
+          window.location.href = '/client';
         }
         return;
       }
@@ -78,7 +79,7 @@ export default function LoginPage() {
         });
 
         if (!retryErr && retryData?.user) {
-          router.push('/client');
+          window.location.href = '/client';
           return;
         }
 
@@ -93,12 +94,13 @@ export default function LoginPage() {
             })
           );
         }
-        router.push('/client');
+        window.location.href = '/client';
         return;
       }
 
       throw authError || new Error('Email atau Kata Sandi salah. Silakan periksa kembali.');
     } catch (err: any) {
+      console.error('Login error:', err);
       let msg = err.message || 'Gagal masuk. Silakan periksa kembali email dan kata sandi Anda.';
       if (msg.includes('Load failed') || msg.includes('Failed to fetch')) {
         msg = 'Koneksi ke Supabase gagal. Silakan periksa jaringan internet atau pastikan URL & Key Supabase di .env.local / Vercel sudah benar.';
@@ -106,7 +108,6 @@ export default function LoginPage() {
         msg = 'Email atau Kata Sandi salah. Silakan periksa kembali.';
       }
       setError(msg);
-    } finally {
       setLoading(false);
     }
   };
