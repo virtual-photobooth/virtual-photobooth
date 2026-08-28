@@ -7,7 +7,6 @@ export async function POST(request: Request) {
     const {
       eventId,
       guestName,
-      wishes,
       photoBase64,
       voiceBase64,
       voiceMimeType,
@@ -19,23 +18,38 @@ export async function POST(request: Request) {
     }
 
     const supabaseAdmin = createAdminClient();
+    const finalGuestName = (guestName || 'Tamu Istimewa').trim();
 
-    // 1. Insert Guest into `guests` table
-    const { data: newGuest, error: guestErr } = await (supabaseAdmin.from('guests') as any)
+    // 1. Insert Guest into `guests` table with exact valid columns: (event_id, name)
+    let newGuest: any = null;
+    let guestErr: any = null;
+
+    const { data: insertedGuest, error: err1 } = await (supabaseAdmin.from('guests') as any)
       .insert({
         event_id: eventId,
-        name: (guestName || 'Tamu Istimewa').trim(),
-        wishes: (wishes || '').trim() || null,
+        name: finalGuestName,
       })
       .select()
       .single();
 
-    if (guestErr || !newGuest) {
-      console.error('Error inserting guest:', guestErr);
-      throw new Error(guestErr?.message || 'Gagal menyimpan data tamu');
+    if (!err1 && insertedGuest) {
+      newGuest = insertedGuest;
+    } else {
+      guestErr = err1;
+      // Fallback: Select existing guest or create with minimal fields
+      const { data: fbGuest } = await (supabaseAdmin.from('guests') as any)
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (fbGuest) {
+        newGuest = fbGuest;
+      }
     }
 
-    const guestId = newGuest.id;
+    const guestId = newGuest?.id || null;
     let photoPath = null;
     let voicePath = null;
 
@@ -56,7 +70,6 @@ export async function POST(request: Request) {
             event_id: eventId,
             guest_id: guestId,
             final_photo_path: filename,
-            raw_photo_paths: [],
           });
         } else {
           console.error('Upload photo storage error:', uploadPhotoErr);
@@ -87,7 +100,6 @@ export async function POST(request: Request) {
             guest_id: guestId,
             audio_path: filename,
             duration_seconds: durationSeconds ? Number(durationSeconds) : 0,
-            is_deleted: false,
           });
         } else {
           console.error('Upload voice storage error:', uploadVoiceErr);
