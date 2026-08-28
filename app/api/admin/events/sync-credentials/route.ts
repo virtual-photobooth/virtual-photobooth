@@ -84,6 +84,20 @@ export async function POST(request: Request) {
       ? storedPassMatch[1]
       : generateUniquePassword(client?.name || event.name);
 
+    // Sync to Supabase Auth & public.profiles
+    if (client?.contact_email && password) {
+      try {
+        await supabaseAdmin.auth.admin.createUser({
+          email: client.contact_email,
+          password: password,
+          email_confirm: true,
+          user_metadata: { full_name: client.name || 'Client Host', role: 'client' },
+        });
+      } catch (authCreateErr: any) {
+        // User may already exist in Auth, ignore duplicate error
+      }
+    }
+
     return NextResponse.json({
       success: true,
       email: client?.contact_email,

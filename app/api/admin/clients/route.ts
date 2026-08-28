@@ -69,6 +69,21 @@ export async function POST(request: Request) {
         .single();
 
       if (error) throw error;
+
+      // Sync to Supabase Auth & public.profiles
+      if (email && generatedPass) {
+        try {
+          await supabaseAdmin.auth.admin.createUser({
+            email: email,
+            password: generatedPass,
+            email_confirm: true,
+            user_metadata: { full_name: name, role: 'client' },
+          });
+        } catch (authCreateErr: any) {
+          // Ignore duplicate auth user error
+        }
+      }
+
       return NextResponse.json({ success: true, client: data });
     }
   } catch (err: any) {
