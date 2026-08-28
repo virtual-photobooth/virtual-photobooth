@@ -38,8 +38,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [qrModalOpen, setQrModalOpen] = useState(false);
 
-  const clientEmail = event?.client?.contact_email || `${(event?.slug || 'client').toLowerCase()}@photobooth.com`;
+  const [syncedEmail, setSyncedEmail] = useState<string>('');
+  const [syncedPassword, setSyncedPassword] = useState<string>('');
+
+  const clientEmail = syncedEmail || event?.client?.contact_email || `${(event?.slug || 'client').toLowerCase()}@photobooth.com`;
   const clientPassword =
+    syncedPassword ||
     event?.client?.notes?.match(/Password:\s*([^\s|]+)/)?.[1] ||
     `VP-${(event?.client?.name || event?.name || 'HOST').replace(/[^a-zA-Z0-9]/g, '').substring(0, 6).toUpperCase()}-1234`;
 
@@ -116,6 +120,22 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         if (error || !data) throw error || new Error('Event not found');
 
         setEvent(data);
+
+        // Sync and guarantee credentials are created and saved in Supabase database
+        try {
+          const syncRes = await fetch('/api/admin/events/sync-credentials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventId }),
+          });
+          const syncData = await syncRes.json();
+          if (syncData.success) {
+            setSyncedEmail(syncData.email);
+            setSyncedPassword(syncData.password);
+          }
+        } catch (sErr) {
+          console.warn('Credentials sync warning:', sErr);
+        }
 
         // Origin domain for QR code & guest link
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
