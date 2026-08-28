@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 import { Event } from '@/lib/types/database';
 import { Users, Image as ImageIcon, Mic, Clock, Sparkles, Download, Heart } from 'lucide-react';
 
+import { getClientScope } from '@/lib/utils/client-scope';
+
 export default function ClientHomePage() {
   const supabase = createClient();
   const [events, setEvents] = useState<Event[]>([]);
@@ -17,19 +19,26 @@ export default function ClientHomePage() {
     async function loadClientData() {
       try {
         setLoading(true);
+        const scope = await getClientScope(supabase);
+        setEvents(scope.events);
+
+        if (scope.eventIds.length === 0) {
+          setGuestsCount(0);
+          setPhotosCount(0);
+          setVoicesCount(0);
+          return;
+        }
+
         const [
-          { data: eventsData },
           { count: gCount },
           { count: pCount },
           { count: vCount },
         ] = await Promise.all([
-          supabase.from('events').select('*'),
-          supabase.from('guests').select('*', { count: 'exact', head: true }),
-          supabase.from('photos').select('*', { count: 'exact', head: true }),
-          supabase.from('voice_messages').select('*', { count: 'exact', head: true }),
+          (supabase.from('guests') as any).select('*', { count: 'exact', head: true }).in('event_id', scope.eventIds),
+          (supabase.from('photos') as any).select('*', { count: 'exact', head: true }).in('event_id', scope.eventIds),
+          (supabase.from('voice_messages') as any).select('*', { count: 'exact', head: true }).in('event_id', scope.eventIds),
         ]);
 
-        if (eventsData) setEvents(eventsData as Event[]);
         setGuestsCount(gCount || 0);
         setPhotosCount(pCount || 0);
         setVoicesCount(vCount || 0);

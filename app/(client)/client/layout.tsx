@@ -6,13 +6,15 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Camera, Home, Users, Image as ImageIcon, Mic, Settings, LogOut } from 'lucide-react';
 
+import { getClientScope } from '@/lib/utils/client-scope';
+
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [monogram, setMonogram] = useState<string>('CB');
-  const [eventName, setEventName] = useState<string>('Event Portal');
+  const [monogram, setMonogram] = useState<string>('VP');
+  const [eventName, setEventName] = useState<string>('Portal Klien');
 
   useEffect(() => {
     async function getUserAndEvent() {
@@ -23,17 +25,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         setUserEmail(user.email || 'Client Host');
       }
 
-      // Fetch active event for dynamic monogram logo
       try {
-        const { data: eventData } = await (supabase.from('events') as any)
-          .select('monogram, name')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (eventData) {
-          if (eventData.monogram) setMonogram(eventData.monogram);
-          if (eventData.name) setEventName(eventData.name);
+        const scope = await getClientScope(supabase);
+        if (scope.events && scope.events.length > 0) {
+          const activeEvt = scope.events[0];
+          if (activeEvt.monogram) setMonogram(activeEvt.monogram);
+          if (activeEvt.name) setEventName(activeEvt.name);
         }
       } catch (e) {
         console.warn('Failed to fetch monogram:', e);

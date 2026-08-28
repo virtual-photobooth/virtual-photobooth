@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 import { VoiceMessage } from '@/lib/types/database';
 import { Mic, Play, Pause, Download, Clock, AlertCircle } from 'lucide-react';
 
+import { getClientScope } from '@/lib/utils/client-scope';
+
 export default function ClientVoicePage() {
   const supabase = createClient();
   const [voices, setVoices] = useState<any[]>([]);
@@ -17,10 +19,17 @@ export default function ClientVoicePage() {
     async function loadVoices() {
       try {
         setLoading(true);
+        const scope = await getClientScope(supabase);
+
+        if (scope.eventIds.length === 0) {
+          setVoices([]);
+          return;
+        }
 
         // 1. Attempt full select with guest name & is_deleted filter
         let { data, error } = await (supabase.from('voice_messages') as any)
           .select('*, guest:guests(name)')
+          .in('event_id', scope.eventIds)
           .eq('is_deleted', false)
           .order('created_at', { ascending: false });
 
@@ -29,11 +38,13 @@ export default function ClientVoicePage() {
           console.warn('Voice query fallback triggered:', error.message);
           let { data: fbData, error: fbErr } = await (supabase.from('voice_messages') as any)
             .select('*, guest:guests(name)')
+            .in('event_id', scope.eventIds)
             .order('created_at', { ascending: false });
 
           if (fbErr) {
             let { data: simpleData, error: simpleErr } = await (supabase.from('voice_messages') as any)
               .select('*')
+              .in('event_id', scope.eventIds)
               .order('created_at', { ascending: false });
 
             if (simpleErr) throw simpleErr;

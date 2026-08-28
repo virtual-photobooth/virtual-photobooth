@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 import { Guest } from '@/lib/types/database';
 import { Users, Search, AtSign, Image as ImageIcon, Mic, Calendar } from 'lucide-react';
 
+import { getClientScope } from '@/lib/utils/client-scope';
+
 export default function ClientGuestsPage() {
   const supabase = createClient();
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -15,8 +17,16 @@ export default function ClientGuestsPage() {
     async function loadGuests() {
       try {
         setLoading(true);
+        const scope = await getClientScope(supabase);
+
+        if (scope.eventIds.length === 0) {
+          setGuests([]);
+          return;
+        }
+
         const { data, error } = await (supabase.from('guests') as any)
           .select('*')
+          .in('event_id', scope.eventIds)
           .order('created_at', { ascending: false });
 
         if (error) throw error;

@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 import { Photo } from '@/lib/types/database';
 import { Image as ImageIcon, Download, Calendar, User, X, Sparkles } from 'lucide-react';
 
+import { getClientScope } from '@/lib/utils/client-scope';
+
 export default function ClientPhotosPage() {
   const supabase = createClient();
   const [photos, setPhotos] = useState<any[]>([]);
@@ -15,14 +17,21 @@ export default function ClientPhotosPage() {
     async function loadPhotos() {
       try {
         setLoading(true);
+        const scope = await getClientScope(supabase);
+
+        if (scope.eventIds.length === 0) {
+          setPhotos([]);
+          return;
+        }
+
         const { data, error } = await (supabase.from('photos') as any)
           .select('*, guest:guests(name)')
+          .in('event_id', scope.eventIds)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
 
         if (data) {
-          // Resolve storage public URLs
           const photosWithUrls = data.map((p: any) => {
             const { data: publicUrlData } = supabase.storage
               .from('virtual-photobooth')
