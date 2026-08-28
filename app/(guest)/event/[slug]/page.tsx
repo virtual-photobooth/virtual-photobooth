@@ -596,17 +596,17 @@ export default function GuestPhotoboothPage({ params }: { params: Promise<{ slug
           </div>
 
           {/* Center Cover Photo with Smooth Bottom Gradient Fade */}
-          <div className="w-full my-4 relative flex flex-col items-center px-4">
-            <div className="w-full max-w-xs aspect-square sm:aspect-[4/3] rounded-3xl overflow-hidden relative shadow-xl border border-[#E2D9CC]/60 bg-[#F4EFE6] flex items-center justify-center">
+          <div className="w-full my-3 relative flex flex-col items-center px-2">
+            <div className="w-full max-w-xs sm:max-w-sm rounded-3xl overflow-hidden relative shadow-xl border border-[#E2D9CC]/60 bg-[#F4EFE6] flex items-center justify-center p-1.5">
               <img
                 src={coverPublicUrl || '/default-wedding-cover.png'}
                 alt="Event Cover"
-                className="w-full h-full object-cover object-center"
+                className="w-full h-auto max-h-[32vh] object-contain rounded-2xl"
               />
               {/* Bottom Gradient Fade Overlay to Cream */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#F9F6F0] via-transparent to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#F9F6F0]/60 via-transparent to-transparent pointer-events-none" />
             </div>
-            <p className="text-xs text-[#78716C] italic font-serif mt-3 relative z-10">
+            <p className="text-xs text-[#78716C] italic font-serif mt-2.5 relative z-10">
               Create a memory for our special day
             </p>
           </div>
