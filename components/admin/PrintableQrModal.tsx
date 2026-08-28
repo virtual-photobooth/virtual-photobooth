@@ -53,11 +53,12 @@ export default function PrintableQrModal({
       ctx.strokeRect(80, 80, canvas.width - 160, canvas.height - 160);
 
       // Top Monogram Initials
-      if (monogram && monogram.trim().length > 0) {
+      const cleanMonogram = monogram && monogram !== 'WE' && monogram !== 'C | B' ? monogram.trim() : '';
+      if (cleanMonogram.length > 0) {
         ctx.fillStyle = '#8C6D46';
         ctx.font = 'bold 56px "Playfair Display", Georgia, serif';
         ctx.textAlign = 'center';
-        ctx.fillText(monogram, canvas.width / 2, 220);
+        ctx.fillText(cleanMonogram, canvas.width / 2, 220);
       }
 
       // Event Name
@@ -144,31 +145,36 @@ export default function PrintableQrModal({
         </div>
 
         {/* Card Preview */}
-        <div className="bg-[#F8F5F0] border-4 border-[#D4A373] rounded-2xl p-6 text-center shadow-inner space-y-4 my-2 text-[#2C2A29]">
-          {monogram && monogram.trim().length > 0 && (
-            <span
-              className={`font-serif italic font-bold text-[#8C6D46] whitespace-nowrap block ${
-                monogram.length > 4
-                  ? 'text-sm'
-                  : monogram.length > 2
-                  ? 'text-base'
-                  : 'text-xl'
-              }`}
-            >
-              {monogram}
-            </span>
-          )}
-          <h3 className="font-serif font-bold text-xl">{eventName}</h3>
-          <p className="text-xs text-[#78716C]">{eventDate}</p>
+        {(() => {
+          const cleanMonogram = monogram && monogram !== 'WE' && monogram !== 'C | B' ? monogram.trim() : '';
+          return (
+            <div className="bg-[#F8F5F0] border-4 border-[#D4A373] rounded-2xl p-6 text-center shadow-inner space-y-4 my-2 text-[#2C2A29]">
+              {cleanMonogram.length > 0 && (
+                <span
+                  className={`font-serif italic font-bold text-[#8C6D46] whitespace-nowrap block ${
+                    cleanMonogram.length > 4
+                      ? 'text-sm'
+                      : cleanMonogram.length > 2
+                      ? 'text-base'
+                      : 'text-xl'
+                  }`}
+                >
+                  {cleanMonogram}
+                </span>
+              )}
+              <h3 className="font-serif font-bold text-xl">{eventName}</h3>
+              <p className="text-xs text-[#78716C]">{eventDate}</p>
 
-          <div className="p-3 bg-white rounded-xl shadow-md inline-block my-2">
-            <img src={qrPreviewUrl} alt="QR Code Preview" className="w-36 h-36 object-contain" />
-          </div>
+              <div className="p-3 bg-white rounded-xl shadow-md inline-block my-2">
+                <img src={qrPreviewUrl} alt="QR Code Preview" className="w-36 h-36 object-contain" />
+              </div>
 
-          <p className="text-xs font-bold text-[#2C2A29] uppercase tracking-wider">
-            Scan QR Code to Start Photobooth
-          </p>
-        </div>
+              <p className="text-xs font-bold text-[#2C2A29] uppercase tracking-wider">
+                Scan QR Code to Start Photobooth
+              </p>
+            </div>
+          );
+        })()}
 
         <p className="text-xs text-slate-400 text-center mt-4">
           High-resolution PNG image ready for acrylic board or table print.

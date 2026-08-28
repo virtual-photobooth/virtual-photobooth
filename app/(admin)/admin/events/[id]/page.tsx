@@ -117,9 +117,24 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           .eq('id', eventId)
           .single();
 
-        if (error || !data) throw error || new Error('Event not found');
+        let cleanMonogram = data.monogram && data.monogram !== 'WE' && data.monogram !== 'C | B' ? data.monogram : '';
 
-        setEvent(data);
+        if (typeof window !== 'undefined') {
+          const savedMeta = localStorage.getItem(`event_meta_${eventId}`);
+          if (savedMeta) {
+            try {
+              const parsed = JSON.parse(savedMeta);
+              if (parsed.monogram !== undefined) {
+                cleanMonogram = parsed.monogram && parsed.monogram !== 'WE' && parsed.monogram !== 'C | B' ? parsed.monogram : '';
+              }
+            } catch (e) {}
+          }
+        }
+
+        setEvent({
+          ...data,
+          monogram: cleanMonogram,
+        });
 
         // Sync and guarantee credentials are created and saved in Supabase database
         try {
