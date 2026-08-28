@@ -18,17 +18,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     async function getUserAndEvent() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        setUserEmail(user.email || 'Client Host');
-      }
-
       try {
-        const scope = await getClientScope(supabase);
-        if (scope.events && scope.events.length > 0) {
-          const activeEvt = scope.events[0];
+        const res = await fetch('/api/client/data');
+        const data = await res.json();
+        if (data?.events && data.events.length > 0) {
+          const activeEvt = data.events[0];
           if (activeEvt.monogram) setMonogram(activeEvt.monogram);
           if (activeEvt.name) setEventName(activeEvt.name);
         }
@@ -37,7 +31,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       }
     }
     getUserAndEvent();
-  }, [supabase]);
+  }, []);
 
   const handleSignOut = async () => {
     if (typeof window !== 'undefined') {

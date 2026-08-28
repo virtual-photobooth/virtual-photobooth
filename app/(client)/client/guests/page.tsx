@@ -17,20 +17,12 @@ export default function ClientGuestsPage() {
     async function loadGuests() {
       try {
         setLoading(true);
-        const scope = await getClientScope(supabase);
+        const res = await fetch('/api/client/data');
+        const data = await res.json();
 
-        if (scope.eventIds.length === 0) {
-          setGuests([]);
-          return;
+        if (data?.guests) {
+          setGuests(data.guests as Guest[]);
         }
-
-        const { data, error } = await (supabase.from('guests') as any)
-          .select('*')
-          .in('event_id', scope.eventIds)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        if (data) setGuests(data as Guest[]);
       } catch (err) {
         console.error('Failed to load guests:', err);
       } finally {
@@ -39,7 +31,7 @@ export default function ClientGuestsPage() {
     }
 
     loadGuests();
-  }, [supabase]);
+  }, []);
 
   const filteredGuests = guests.filter(
     (g) =>

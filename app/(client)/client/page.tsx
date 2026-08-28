@@ -19,29 +19,15 @@ export default function ClientHomePage() {
     async function loadClientData() {
       try {
         setLoading(true);
-        const scope = await getClientScope(supabase);
-        setEvents(scope.events);
+        const res = await fetch('/api/client/data');
+        const data = await res.json();
 
-        if (scope.eventIds.length === 0) {
-          setGuestsCount(0);
-          setPhotosCount(0);
-          setVoicesCount(0);
-          return;
+        if (data) {
+          setEvents(data.events || []);
+          setGuestsCount(data.counts?.guests || 0);
+          setPhotosCount(data.counts?.photos || 0);
+          setVoicesCount(data.counts?.voices || 0);
         }
-
-        const [
-          { count: gCount },
-          { count: pCount },
-          { count: vCount },
-        ] = await Promise.all([
-          (supabase.from('guests') as any).select('*', { count: 'exact', head: true }).in('event_id', scope.eventIds),
-          (supabase.from('photos') as any).select('*', { count: 'exact', head: true }).in('event_id', scope.eventIds),
-          (supabase.from('voice_messages') as any).select('*', { count: 'exact', head: true }).in('event_id', scope.eventIds),
-        ]);
-
-        setGuestsCount(gCount || 0);
-        setPhotosCount(pCount || 0);
-        setVoicesCount(vCount || 0);
       } catch (err) {
         console.error('Error fetching client overview:', err);
       } finally {
@@ -49,7 +35,7 @@ export default function ClientHomePage() {
       }
     }
     loadClientData();
-  }, [supabase]);
+  }, []);
 
   return (
     <div className="space-y-8">

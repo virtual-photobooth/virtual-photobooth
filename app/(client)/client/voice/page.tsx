@@ -19,54 +19,11 @@ export default function ClientVoicePage() {
     async function loadVoices() {
       try {
         setLoading(true);
-        const scope = await getClientScope(supabase);
+        const res = await fetch('/api/client/data');
+        const data = await res.json();
 
-        if (scope.eventIds.length === 0) {
-          setVoices([]);
-          return;
-        }
-
-        // 1. Attempt full select with guest name & is_deleted filter
-        let { data, error } = await (supabase.from('voice_messages') as any)
-          .select('*, guest:guests(name)')
-          .in('event_id', scope.eventIds)
-          .eq('is_deleted', false)
-          .order('created_at', { ascending: false });
-
-        // 2. Fallback if is_deleted column or guest join is missing
-        if (error) {
-          console.warn('Voice query fallback triggered:', error.message);
-          let { data: fbData, error: fbErr } = await (supabase.from('voice_messages') as any)
-            .select('*, guest:guests(name)')
-            .in('event_id', scope.eventIds)
-            .order('created_at', { ascending: false });
-
-          if (fbErr) {
-            let { data: simpleData, error: simpleErr } = await (supabase.from('voice_messages') as any)
-              .select('*')
-              .in('event_id', scope.eventIds)
-              .order('created_at', { ascending: false });
-
-            if (simpleErr) throw simpleErr;
-            data = simpleData;
-          } else {
-            data = fbData;
-          }
-        }
-
-        if (data) {
-          const resolvedVoices = data.map((v: any) => {
-            const { data: publicUrlData } = supabase.storage
-              .from('virtual-photobooth')
-              .getPublicUrl(v.audio_path);
-
-            return {
-              ...v,
-              publicUrl: publicUrlData?.publicUrl || '',
-            };
-          });
-
-          setVoices(resolvedVoices);
+        if (data?.voiceMessages) {
+          setVoices(data.voiceMessages);
         }
       } catch (err) {
         console.error('Failed to load voice messages:', err);
@@ -76,7 +33,7 @@ export default function ClientVoicePage() {
     }
 
     loadVoices();
-  }, [supabase]);
+  }, []);
 
   const togglePlay = (id: string) => {
     const audioEl = audioRefs.current[id];

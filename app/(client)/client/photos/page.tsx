@@ -17,33 +17,11 @@ export default function ClientPhotosPage() {
     async function loadPhotos() {
       try {
         setLoading(true);
-        const scope = await getClientScope(supabase);
+        const res = await fetch('/api/client/data');
+        const data = await res.json();
 
-        if (scope.eventIds.length === 0) {
-          setPhotos([]);
-          return;
-        }
-
-        const { data, error } = await (supabase.from('photos') as any)
-          .select('*, guest:guests(name)')
-          .in('event_id', scope.eventIds)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        if (data) {
-          const photosWithUrls = data.map((p: any) => {
-            const { data: publicUrlData } = supabase.storage
-              .from('virtual-photobooth')
-              .getPublicUrl(p.final_photo_path);
-
-            return {
-              ...p,
-              publicUrl: publicUrlData?.publicUrl || '',
-            };
-          });
-
-          setPhotos(photosWithUrls);
+        if (data?.photos) {
+          setPhotos(data.photos);
         }
       } catch (err) {
         console.error('Failed to load photos:', err);
@@ -53,7 +31,7 @@ export default function ClientPhotosPage() {
     }
 
     loadPhotos();
-  }, [supabase]);
+  }, []);
 
   const handleDownload = (url: string, filename: string) => {
     const link = document.createElement('a');
