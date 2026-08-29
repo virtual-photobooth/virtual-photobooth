@@ -84,7 +84,6 @@ export async function POST(request: Request) {
     const insertPayload: any = {
       client_id,
       name,
-      monogram: monogram !== undefined ? monogram : 'WE',
       slug,
       event_date: event_date || new Date().toISOString().split('T')[0],
       status: status || 'active',
@@ -93,18 +92,24 @@ export async function POST(request: Request) {
       is_voice_enabled: is_voice_enabled !== undefined ? Boolean(is_voice_enabled) : true,
       voice_retention_days: voice_retention_days ? Number(voice_retention_days) : 7,
       frame_path: frame_path || null,
-      cover_path: cover_path || null,
     };
+
+    if (monogram) insertPayload.monogram = monogram;
+    if (subtitle) insertPayload.subtitle = subtitle;
+    if (cover_path) insertPayload.cover_path = cover_path;
 
     let { data, error } = await (supabaseAdmin.from('events') as any)
       .insert(insertPayload)
       .select()
       .single();
 
-    // Fallback if column monogram or subtitle is not in table schema
+    // Fallback if optional schema columns (monogram, subtitle, cover_path) are missing in DB table
     if (error) {
+      console.warn('Initial insert error, stripping extended columns:', error.message);
       delete insertPayload.monogram;
       delete insertPayload.subtitle;
+      delete insertPayload.cover_path;
+
       const { data: retryData, error: retryError } = await (supabaseAdmin.from('events') as any)
         .insert(insertPayload)
         .select()
@@ -141,9 +146,12 @@ export async function PUT(request: Request) {
       .select()
       .single();
 
-    if (error && (updateFields.monogram || updateFields.subtitle)) {
+    if (error) {
+      console.warn('Initial update error, stripping optional extended columns:', error.message);
       delete updateFields.monogram;
       delete updateFields.subtitle;
+      delete updateFields.cover_path;
+
       const { data: retryData, error: retryError } = await (supabaseAdmin.from('events') as any)
         .update({
           ...updateFields,
