@@ -207,19 +207,26 @@ export async function GET(request: Request) {
 
     const allGalleryItems = [...galleryItemsFromPhotos, ...standaloneItems];
 
-    return NextResponse.json({
-      success: true,
-      event: {
-        id: event.id,
-        name: event.name,
-        monogram: event.monogram,
-        subtitle: event.subtitle,
-        slug: event.slug,
-        event_date: event.event_date,
-        coverPublicUrl: coverPublicUrl,
+    return NextResponse.json(
+      {
+        success: true,
+        event: {
+          id: event.id,
+          name: event.name,
+          monogram: event.monogram,
+          subtitle: event.subtitle,
+          slug: event.slug,
+          event_date: event.event_date,
+          coverPublicUrl: coverPublicUrl,
+        },
+        items: allGalleryItems,
       },
-      items: allGalleryItems,
-    });
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        },
+      }
+    );
   } catch (err: any) {
     console.error('Error in gallery API:', err);
     return NextResponse.json({ success: false, message: err.message || 'Server error' }, { status: 500 });

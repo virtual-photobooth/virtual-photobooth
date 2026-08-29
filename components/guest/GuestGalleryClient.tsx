@@ -62,7 +62,9 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
     async function fetchGallery() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/guest/gallery?slug=${encodeURIComponent(slug)}`);
+        const res = await fetch(`/api/guest/gallery?slug=${encodeURIComponent(slug)}&t=${Date.now()}`, {
+          cache: 'no-store',
+        });
         const data = await res.json();
 
         if (!res.ok || !data.success) {

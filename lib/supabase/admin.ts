@@ -7,7 +7,15 @@ const DEFAULT_ANON_KEY =
 
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_ANON_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!serviceKey && typeof window === 'undefined') {
+    console.warn(
+      '[WARNING] SUPABASE_SERVICE_ROLE_KEY environment variable is not defined! API routes are using ANON_KEY which may hit RLS restrictions.'
+    );
+  }
+
+  const key = serviceKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_ANON_KEY;
 
   return createClient<Database>(url, key, {
     auth: {

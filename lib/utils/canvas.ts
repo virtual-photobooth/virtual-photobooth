@@ -213,7 +213,7 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     drawDefaultBranding(ctx, canvasWidth, canvasHeight, eventName, eventDate);
   }
 
-  return canvas.toDataURL('image/png', 0.95);
+  return canvas.toDataURL('image/jpeg', 0.85);
 }
 
 function drawDefaultBranding(

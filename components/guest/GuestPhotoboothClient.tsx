@@ -524,9 +524,9 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
       }
 
       setStep(6); // Go to Thank You Step
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error submitting guestbook:', err);
-      setStep(6);
+      alert(err?.message || 'Gagal mengirim data kenangan. Pastikan koneksi internet Anda stabil lalu coba lagi.');
     } finally {
       setUploadingVoice(false);
     }

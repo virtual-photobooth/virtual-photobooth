@@ -165,6 +165,18 @@ export async function POST(request: Request) {
       }
     }
 
+    // Check if photo was provided but failed completely
+    if (photoBase64 && !photoPath && photoErrorMsg) {
+      return NextResponse.json(
+        { success: false, message: `Gagal menyimpan foto: ${photoErrorMsg}` },
+        { status: 500 }
+      );
+    }
+
+    if (voiceBase64 && !voicePath && voiceErrorMsg) {
+      console.warn('Voice upload failed but photo saved:', voiceErrorMsg);
+    }
+
     return NextResponse.json({
       success: true,
       guestId,
