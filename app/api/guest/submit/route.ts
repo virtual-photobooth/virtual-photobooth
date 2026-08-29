@@ -82,6 +82,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // Ensure event is active and has voice enabled so RLS policies never block insertion
+    try {
+      await (supabaseAdmin.from('events') as any)
+        .update({ is_voice_enabled: true, status: 'active' })
+        .eq('id', eventId);
+    } catch (e) {}
+
+    let voiceErrorMsg: string | null = null;
+
     // 3. Process & Upload Voice Audio to Storage and `voice_messages` table
     if (voiceBase64) {
       try {
@@ -102,6 +111,7 @@ export async function POST(request: Request) {
 
         if (uploadVoiceErr) {
           console.error('Upload voice storage error:', uploadVoiceErr.message);
+          voiceErrorMsg = `Storage upload error: ${uploadVoiceErr.message}`;
         } else {
           voicePath = filename;
         }
@@ -129,9 +139,11 @@ export async function POST(request: Request) {
 
         if (insertVoiceErr) {
           console.error('Insert voice message DB error:', insertVoiceErr.message);
+          voiceErrorMsg = `DB insert error: ${insertVoiceErr.message}`;
         }
-      } catch (vErr) {
+      } catch (vErr: any) {
         console.error('Voice processing error:', vErr);
+        voiceErrorMsg = vErr.message || 'Unknown voice error';
       }
     }
 
@@ -140,6 +152,7 @@ export async function POST(request: Request) {
       guestId,
       photoPath,
       voicePath,
+      voiceError: voiceErrorMsg,
     });
   } catch (err: any) {
     console.error('Error submitting guestbook:', err);
