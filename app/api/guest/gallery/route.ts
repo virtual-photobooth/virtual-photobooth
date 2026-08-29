@@ -74,9 +74,9 @@ export async function GET(request: Request) {
       coverPublicUrl = coverUrlData?.publicUrl || null;
     }
 
-    // 2. Fetch Photos for this Event
+    // 2. Fetch Photos for this Event with Guest relationship
     const { data: photos, error: photosErr } = await (supabaseAdmin.from('photos') as any)
-      .select('*, guests(id, name), voice_messages(*)')
+      .select('*, guests(id, name)')
       .eq('event_id', event.id)
       .order('created_at', { ascending: false });
 
@@ -84,8 +84,30 @@ export async function GET(request: Request) {
       console.error('Error fetching gallery photos:', photosErr);
     }
 
-    // 3. Map Photos to Gallery Item Format with Public URLs
-    const galleryItems = (photos || []).map((photo: any) => {
+    // 3. Fetch Voice Messages for this Event
+    const { data: voiceMessages, error: voiceErr } = await (supabaseAdmin.from('voice_messages') as any)
+      .select('*')
+      .eq('event_id', event.id)
+      .eq('is_deleted', false);
+
+    if (voiceErr) {
+      console.error('Error fetching voice messages:', voiceErr);
+    }
+
+    // Map voice messages by guest_id for fast lookup
+    const voiceMapByGuestId = new Map<string, any>();
+    const voiceListWithoutGuest: any[] = [];
+
+    (voiceMessages || []).forEach((v: any) => {
+      if (v.guest_id) {
+        voiceMapByGuestId.set(v.guest_id, v);
+      } else {
+        voiceListWithoutGuest.push(v);
+      }
+    });
+
+    // 4. Map Photos to Gallery Items with Storage Public URLs
+    const galleryItems = (photos || []).map((photo: any, index: number) => {
       let photoUrl = '';
       if (photo.final_photo_path) {
         if (photo.final_photo_path.startsWith('http://') || photo.final_photo_path.startsWith('https://')) {
@@ -100,15 +122,13 @@ export async function GET(request: Request) {
 
       const guestName = photo.guests?.name || 'Tamu Istimewa';
 
-      // Find matching voice message (if available)
+      // Find matching voice message by guest_id or fallback
       let voiceUrl: string | null = null;
       let durationSeconds: number = 0;
 
-      const voiceMsg = Array.isArray(photo.voice_messages)
-        ? photo.voice_messages.find((v: any) => !v.is_deleted)
-        : photo.voice_messages && !photo.voice_messages.is_deleted
-        ? photo.voice_messages
-        : null;
+      const voiceMsg = photo.guest_id
+        ? voiceMapByGuestId.get(photo.guest_id)
+        : voiceListWithoutGuest[index] || null;
 
       if (voiceMsg && voiceMsg.audio_path) {
         if (voiceMsg.audio_path.startsWith('http://') || voiceMsg.audio_path.startsWith('https://')) {
