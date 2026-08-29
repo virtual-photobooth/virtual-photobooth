@@ -122,7 +122,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, event: data });
   } catch (err: any) {
     console.error('Error creating event:', err);
-    return NextResponse.json({ success: false, message: err.message || 'Server error' }, { status: 500 });
+    let msg = err.message || 'Server error';
+    if (msg.includes('row-level security') || msg.includes('RLS')) {
+      msg = 'Supabase RLS Policy menolak operasi ini. Silakan jalankan script SQL perbaikan RLS di Supabase SQL Editor.';
+    }
+    return NextResponse.json({ success: false, message: msg }, { status: 500 });
   }
 }
 
