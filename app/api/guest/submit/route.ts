@@ -68,11 +68,15 @@ export async function POST(request: Request) {
           console.error('Upload photo storage error:', uploadPhotoErr);
         }
 
-        await (supabaseAdmin.from('photos') as any).insert({
+        const { error: insertPhotoErr } = await (supabaseAdmin.from('photos') as any).insert({
           event_id: eventId,
           guest_id: guestId,
           final_photo_path: photoPath || filename,
         });
+
+        if (insertPhotoErr) {
+          console.error('Insert photo DB error:', insertPhotoErr.message);
+        }
       } catch (pErr) {
         console.error('Photo processing error:', pErr);
       }
