@@ -66,13 +66,18 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     const { topPad, bottomPad } = detectFramePaddings(frameImg, canvasWidth, canvasHeight);
 
     if (photoCount === 2) {
-      // 2-Photo Full-Bleed Alignment:
-      // Slot 1 starts at y=0 (top edge of canvas) to y=1620 (hidden behind middle blue banner)
-      // Slot 2 starts at y=1620 to y=3240 (bottom edge of canvas)
-      // Zero black gap at top or bottom, zero frame drop!
+      // Respect frame border paddings for 2-photo layout so photos sit perfectly inside frame cutouts
+      const paddingX = 140;
+      const paddingTop = Math.max(topPad, 280);
+      const bottomPadding = Math.max(bottomPad, 320);
+      const gap = 80;
+      const availableH = canvasHeight - paddingTop - bottomPadding - gap;
+      const cellH = Math.floor(availableH / 2);
+      const cellW = canvasWidth - paddingX * 2;
+
       slots = [
-        { x: 0, y: 0, w: canvasWidth, h: 1620 },
-        { x: 0, y: 1620, w: canvasWidth, h: 1620 },
+        { x: paddingX, y: paddingTop, w: cellW, h: cellH },
+        { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
       ];
     } else if (photoCount === 3) {
       const h3 = canvasHeight / 3;

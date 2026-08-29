@@ -64,6 +64,8 @@ export async function POST(request: Request) {
     let voicePath = null;
     let voiceErrorMsg: string | null = null;
 
+    let photoErrorMsg: string | null = null;
+
     // 2. Process & Upload Photo to Storage and `photos` table
     if (photoBase64) {
       try {
@@ -80,6 +82,7 @@ export async function POST(request: Request) {
           photoPath = filename;
         } else {
           console.error('Upload photo storage error:', uploadPhotoErr);
+          photoErrorMsg = `Storage upload error: ${uploadPhotoErr.message}`;
         }
 
         const { error: insertPhotoErr } = await (supabaseAdmin.from('photos') as any).insert({
@@ -90,9 +93,11 @@ export async function POST(request: Request) {
 
         if (insertPhotoErr) {
           console.error('Insert photo DB error:', insertPhotoErr.message);
+          photoErrorMsg = `DB insert error: ${insertPhotoErr.message}`;
         }
-      } catch (pErr) {
+      } catch (pErr: any) {
         console.error('Photo processing error:', pErr);
+        photoErrorMsg = pErr.message || 'Unknown photo error';
       }
     }
 
@@ -157,6 +162,7 @@ export async function POST(request: Request) {
       guestId,
       photoPath,
       voicePath,
+      photoError: photoErrorMsg,
       voiceError: voiceErrorMsg,
     });
   } catch (err: any) {
