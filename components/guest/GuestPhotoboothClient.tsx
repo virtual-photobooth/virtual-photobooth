@@ -992,9 +992,9 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
           <div className="w-full space-y-3">
             <Link
               href={`/event/${encodeURIComponent(event.slug)}/gallery`}
-              className="w-full py-4 px-6 rounded-full bg-[#800020] hover:bg-[#66001A] text-white font-bold text-xs tracking-widest uppercase shadow-2xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#9A2B42] block text-center animate-pulse"
+              className="w-full py-4 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-bold text-xs tracking-widest uppercase shadow-2xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#423E3C] block text-center animate-pulse"
             >
-              <Sparkles className="w-4 h-4 text-[#FFD700]" />
+              <Sparkles className="w-4 h-4 text-[#D4A373]" />
               <span>LIHAT GALERI KENANGAN</span>
             </Link>
 
