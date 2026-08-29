@@ -145,6 +145,31 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     setCoverPreviewUrl(URL.createObjectURL(file));
   };
 
+  const uploadFileViaAdminApi = async (path: string, file: File) => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const res = await fetch('/api/admin/storage/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path,
+        fileBase64: base64,
+        contentType: file.type || (path.endsWith('.png') ? 'image/png' : 'image/jpeg'),
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to upload file via admin API');
+    }
+    return data.publicUrl;
+  };
+
   const handleUploadCover = async () => {
     if (!coverFile) return;
     setUploadingCover(true);
@@ -152,31 +177,15 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
     try {
       const storagePath = `events/${eventId}/cover/cover.jpg`;
+      const publicUrl = await uploadFileViaAdminApi(storagePath, coverFile);
 
-      const { error: uploadErr } = await supabase.storage
-        .from('virtual-photobooth')
-        .upload(storagePath, coverFile, {
-          upsert: true,
-          contentType: coverFile.type || 'image/jpeg',
-        });
+      await fetch('/api/admin/events', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: eventId, cover_path: storagePath }),
+      });
 
-      if (uploadErr) throw uploadErr;
-
-      const { error: updateErr } = await (supabase.from('events') as any)
-        .update({ cover_path: storagePath })
-        .eq('id', eventId);
-
-      if (updateErr && updateErr.message?.includes('cover_path')) {
-        console.warn('cover_path column not in DB yet');
-      } else if (updateErr) {
-        throw updateErr;
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('virtual-photobooth')
-        .getPublicUrl(storagePath);
-
-      setCoverPreviewUrl(`${publicUrlData.publicUrl}?t=${Date.now()}`);
+      setCoverPreviewUrl(`${publicUrl}?t=${Date.now()}`);
       setCoverFile(null);
       setMessage({ type: 'success', text: 'Cover Photo uploaded successfully!' });
     } catch (err: any) {
@@ -210,7 +219,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     setFramePreviewUrl(objectUrl);
   };
 
-  // Upload Frame to Supabase Storage
+  // Upload Frame to Supabase Storage via Admin API
   const handleUploadFrame = async () => {
     if (!frameFile) return;
     setUploadingFrame(true);
@@ -218,29 +227,15 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
     try {
       const storagePath = `events/${eventId}/frame/frame.png`;
+      const publicUrl = await uploadFileViaAdminApi(storagePath, frameFile);
 
-      // Upload/overwrite file in Supabase storage
-      const { error: uploadErr } = await supabase.storage
-        .from('virtual-photobooth')
-        .upload(storagePath, frameFile, {
-          upsert: true,
-          contentType: 'image/png',
-        });
+      await fetch('/api/admin/events', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: eventId, frame_path: storagePath }),
+      });
 
-      if (uploadErr) throw uploadErr;
-
-      // Update database record
-      const { error: updateErr } = await (supabase.from('events') as any)
-        .update({ frame_path: storagePath })
-        .eq('id', eventId);
-
-      if (updateErr) throw updateErr;
-
-      const { data: publicUrlData } = supabase.storage
-        .from('virtual-photobooth')
-        .getPublicUrl(storagePath);
-
-      setFramePreviewUrl(`${publicUrlData.publicUrl}?t=${Date.now()}`);
+      setFramePreviewUrl(`${publicUrl}?t=${Date.now()}`);
       setFrameFile(null);
       setMessage({ type: 'success', text: 'PNG frame template uploaded successfully!' });
     } catch (err: any) {
@@ -260,30 +255,22 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       const coverStoragePath = `events/${eventId}/cover/cover.jpg`;
       const frameStoragePath = `events/${eventId}/frame/frame.png`;
 
-      // 1. Auto-upload cover file if selected
+      // 1. Auto-upload cover file via Admin API if selected
       if (coverFile) {
-        const { error: coverUploadErr } = await supabase.storage
-          .from('virtual-photobooth')
-          .upload(coverStoragePath, coverFile, {
-            upsert: true,
-            contentType: coverFile.type || 'image/jpeg',
-          });
-        if (coverUploadErr) console.warn('Cover upload error:', coverUploadErr);
-        setCoverFile(null);
-        setCoverPreviewUrl(`${supabase.storage.from('virtual-photobooth').getPublicUrl(coverStoragePath).data.publicUrl}?t=${Date.now()}`);
+        try {
+          const coverUrl = await uploadFileViaAdminApi(coverStoragePath, coverFile);
+          setCoverFile(null);
+          setCoverPreviewUrl(`${coverUrl}?t=${Date.now()}`);
+        } catch (e) {
+          console.warn('Cover upload warning:', e);
+        }
       }
 
-      // 2. Auto-upload frame file if selected
+      // 2. Auto-upload frame file via Admin API if selected
       if (frameFile) {
-        const { error: frameUploadErr } = await supabase.storage
-          .from('virtual-photobooth')
-          .upload(frameStoragePath, frameFile, {
-            upsert: true,
-            contentType: 'image/png',
-          });
-        if (frameUploadErr) throw frameUploadErr;
+        const frameUrl = await uploadFileViaAdminApi(frameStoragePath, frameFile);
         setFrameFile(null);
-        setFramePreviewUrl(`${supabase.storage.from('virtual-photobooth').getPublicUrl(frameStoragePath).data.publicUrl}?t=${Date.now()}`);
+        setFramePreviewUrl(`${frameUrl}?t=${Date.now()}`);
       }
 
       // Save metadata backup to localStorage so monogram & subtitle changes persist even if DB column is missing
@@ -315,7 +302,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           is_voice_enabled: formData.is_voice_enabled,
           voice_retention_days: Number(formData.voice_retention_days),
           frame_path: frameStoragePath,
-          cover_path: coverStoragePath,
         }),
       });
 
