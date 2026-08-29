@@ -105,7 +105,7 @@ export async function GET(request: Request) {
     const { data: voiceMessages, error: voiceErr } = await (supabaseAdmin.from('voice_messages') as any)
       .select('*')
       .eq('event_id', event.id)
-      .eq('is_deleted', false);
+      .order('created_at', { ascending: false });
 
     if (voiceErr) {
       console.error('Error fetching voice messages:', voiceErr);
