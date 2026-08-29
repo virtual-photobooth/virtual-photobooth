@@ -74,14 +74,31 @@ export async function GET(request: Request) {
       coverPublicUrl = coverUrlData?.publicUrl || null;
     }
 
-    // 2. Fetch Photos for this Event with Guest relationship
-    const { data: photos, error: photosErr } = await (supabaseAdmin.from('photos') as any)
-      .select('*, guests(id, name)')
+    // 2. Fetch Photos for this Event
+    let photos: any[] = [];
+    const { data: rawPhotos, error: photosErr } = await (supabaseAdmin.from('photos') as any)
+      .select('*')
       .eq('event_id', event.id)
       .order('created_at', { ascending: false });
 
     if (photosErr) {
       console.error('Error fetching gallery photos:', photosErr);
+    } else {
+      photos = rawPhotos || [];
+    }
+
+    // Fetch guest details for photo guest_ids
+    const guestIds = photos.map((p: any) => p.guest_id).filter(Boolean);
+    const guestMap = new Map<string, string>();
+
+    if (guestIds.length > 0) {
+      const { data: guestsData } = await (supabaseAdmin.from('guests') as any)
+        .select('id, name')
+        .in('id', guestIds);
+
+      (guestsData || []).forEach((g: any) => {
+        if (g.id) guestMap.set(g.id, g.name);
+      });
     }
 
     // 3. Fetch Voice Messages for this Event
@@ -120,7 +137,7 @@ export async function GET(request: Request) {
         }
       }
 
-      const guestName = photo.guests?.name || 'Tamu Istimewa';
+      const guestName = (photo.guest_id ? guestMap.get(photo.guest_id) : null) || photo.guests?.name || 'Tamu Istimewa';
 
       // Find matching voice message by guest_id or fallback
       let voiceUrl: string | null = null;
