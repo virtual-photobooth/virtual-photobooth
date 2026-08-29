@@ -30,7 +30,9 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
       (src) =>
         new Promise<HTMLImageElement>((resolve, reject) => {
           const img = new Image();
-          img.crossOrigin = 'anonymous';
+          if (src.startsWith('http://') || src.startsWith('https://')) {
+            img.crossOrigin = 'anonymous';
+          }
           img.onload = () => resolve(img);
           img.onerror = reject;
           img.src = src;
@@ -41,17 +43,19 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
   // Load custom PNG frame first if available (to auto-detect cutout windows)
   let frameImg: HTMLImageElement | null = null;
   if (frameImageUrl) {
-    try {
-      frameImg = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = frameImageUrl;
-      });
-    } catch (e) {
-      console.warn('Could not pre-load frame image:', e);
-    }
+    frameImg = await new Promise<HTMLImageElement | null>((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => {
+        // Fallback without crossOrigin if CORS header fails on mobile Safari
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => resolve(fallbackImg);
+        fallbackImg.onerror = () => resolve(null);
+        fallbackImg.src = frameImageUrl;
+      };
+      img.src = frameImageUrl;
+    });
   }
 
   // Calculate layout grid based on photo count
