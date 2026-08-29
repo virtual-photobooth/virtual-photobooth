@@ -518,7 +518,9 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
 
       const resData = await res.json();
       if (!res.ok || !resData.success) {
-        console.warn('Guestbook submit warn:', resData?.message);
+        console.error('Guestbook submit failed:', resData?.message);
+        alert(resData?.message || 'Gagal menyimpan memory ke database.');
+        return;
       }
 
       setStep(6); // Go to Thank You Step

@@ -42,28 +42,22 @@ export async function POST(request: Request) {
 
     if (err1) {
       console.error('Insert guest DB error:', err1.message);
+      if (err1.message.includes('row-level security') || err1.message.includes('RLS')) {
+        return NextResponse.json(
+          { success: false, message: 'Database RLS policy rejected guest insert. Silakan jalankan script SQL perbaikan RLS di Supabase SQL Editor.' },
+          { status: 500 }
+        );
+      }
     }
 
     if (!err1 && insertedGuest) {
       newGuest = insertedGuest;
-    } else {
-      const { data: fbGuest } = await (supabaseAdmin.from('guests') as any)
-        .select('*')
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (fbGuest) {
-        newGuest = fbGuest;
-      }
     }
 
     const guestId = newGuest?.id || null;
     let photoPath = null;
     let voicePath = null;
     let voiceErrorMsg: string | null = null;
-
     let photoErrorMsg: string | null = null;
 
     // 2. Process & Upload Photo to Storage and `photos` table
@@ -94,6 +88,12 @@ export async function POST(request: Request) {
         if (insertPhotoErr) {
           console.error('Insert photo DB error:', insertPhotoErr.message);
           photoErrorMsg = `DB insert error: ${insertPhotoErr.message}`;
+          if (insertPhotoErr.message.includes('row-level security') || insertPhotoErr.message.includes('RLS')) {
+            return NextResponse.json(
+              { success: false, message: 'Database RLS policy rejected photo insert. Silakan jalankan script SQL perbaikan RLS di Supabase SQL Editor.' },
+              { status: 500 }
+            );
+          }
         }
       } catch (pErr: any) {
         console.error('Photo processing error:', pErr);
@@ -150,6 +150,12 @@ export async function POST(request: Request) {
         if (insertVoiceErr) {
           console.error('Insert voice message DB error:', insertVoiceErr.message);
           voiceErrorMsg = `DB insert error: ${insertVoiceErr.message}`;
+          if (insertVoiceErr.message.includes('row-level security') || insertVoiceErr.message.includes('RLS')) {
+            return NextResponse.json(
+              { success: false, message: 'Database RLS policy rejected voice insert. Silakan jalankan script SQL perbaikan RLS di Supabase SQL Editor.' },
+              { status: 500 }
+            );
+          }
         }
       } catch (vErr: any) {
         console.error('Voice processing error:', vErr);
