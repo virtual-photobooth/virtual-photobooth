@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, use } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Event } from '@/lib/types/database';
 import { createFinalPhotoComposite } from '@/lib/utils/canvas';
@@ -24,6 +25,7 @@ import {
   QrCode,
   AlertCircle,
   Loader2,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 export default function GuestPhotoboothClient({ params }: { params: Promise<{ slug: string }> }) {
@@ -588,8 +590,8 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
               </p>
             </div>
 
-            {/* Bottom Start Photobooth Button */}
-            <div className="w-full pt-1 z-10">
+            {/* Bottom Start Photobooth & Gallery Buttons */}
+            <div className="w-full pt-1 z-10 space-y-2">
               <button
                 onClick={() => {
                   setStep(2);
@@ -597,8 +599,17 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
                 }}
                 className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-bold text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#423E3C]"
               >
+                <Camera className="w-4 h-4 text-[#D4A373]" />
                 <span>START PHOTOBOOTH</span>
               </button>
+
+              <Link
+                href={`/event/${encodeURIComponent(event.slug)}/gallery`}
+                className="w-full py-3 px-6 rounded-full bg-[#F4EFE6] hover:bg-[#E8E1D5] text-[#2C2A29] font-bold text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 cursor-pointer border border-[#E2D9CC] block text-center"
+              >
+                <ImageIcon className="w-4 h-4 text-[#8C6D46]" />
+                <span>LIHAT GALERI ACARA</span>
+              </Link>
             </div>
           </div>
         </div>
@@ -986,20 +997,30 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
             <strong className="text-[#2C2A29]">{event.name}</strong>.
           </p>
 
-          <button
-            onClick={() => {
-              setCapturedSnapshots([]);
-              setCompositedImage(null);
-              setVoiceBlob(null);
-              setVoiceAudioUrl(null);
-              setGuestName('');
-              setGuestNote('');
-              setStep(1);
-            }}
-            className="w-full py-4 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-medium text-xs tracking-widest uppercase shadow-xl transition-all cursor-pointer active:scale-95"
-          >
-            <span>KEMBALI KE HALAMAN UTAMA</span>
-          </button>
+          <div className="w-full space-y-3">
+            <Link
+              href={`/event/${encodeURIComponent(event.slug)}/gallery`}
+              className="w-full py-4 px-6 rounded-full bg-[#800020] hover:bg-[#66001A] text-white font-bold text-xs tracking-widest uppercase shadow-2xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#9A2B42] block text-center animate-pulse"
+            >
+              <Sparkles className="w-4 h-4 text-[#FFD700]" />
+              <span>LIHAT GALERI KENANGAN</span>
+            </Link>
+
+            <button
+              onClick={() => {
+                setCapturedSnapshots([]);
+                setCompositedImage(null);
+                setVoiceBlob(null);
+                setVoiceAudioUrl(null);
+                setGuestName('');
+                setGuestNote('');
+                setStep(1);
+              }}
+              className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-[#F4EFE6] text-[#2C2A29] font-semibold text-xs tracking-wider uppercase border border-[#E2D9CC] transition-all cursor-pointer active:scale-95 shadow-xs"
+            >
+              <span>KEMBALI KE HALAMAN UTAMA</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
