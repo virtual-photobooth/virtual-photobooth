@@ -124,7 +124,7 @@ export async function GET(request: Request) {
     });
 
     // 4. Map Photos to Gallery Items with Storage Public URLs
-    const galleryItems = (photos || []).map((photo: any, index: number) => {
+    const galleryItemsFromPhotos = (photos || []).map((photo: any, index: number) => {
       let photoUrl = '';
       if (photo.final_photo_path) {
         if (photo.final_photo_path.startsWith('http://') || photo.final_photo_path.startsWith('https://')) {
@@ -170,6 +170,40 @@ export async function GET(request: Request) {
       };
     });
 
+    // 5. Include Standalone Voice Messages (voices recorded without photo)
+    const coveredGuestIds = new Set(photos.map((p: any) => p.guest_id).filter(Boolean));
+    const standaloneVoices = (voiceMessages || []).filter(
+      (v: any) => v.guest_id && !coveredGuestIds.has(v.guest_id)
+    );
+
+    const standaloneItems = standaloneVoices.map((v: any) => {
+      let voiceUrl: string | null = null;
+      if (v.audio_path) {
+        if (v.audio_path.startsWith('http://') || v.audio_path.startsWith('https://')) {
+          voiceUrl = v.audio_path;
+        } else {
+          const { data: vUrlData } = supabaseAdmin.storage
+            .from('virtual-photobooth')
+            .getPublicUrl(v.audio_path);
+          voiceUrl = vUrlData?.publicUrl || null;
+        }
+      }
+
+      const guestName = (v.guest_id ? guestMap.get(v.guest_id) : null) || 'Tamu Spesial';
+
+      return {
+        id: `voice-${v.id}`,
+        guestId: v.guest_id,
+        guestName,
+        photoUrl: coverPublicUrl || '/default-wedding-cover.png',
+        voiceUrl,
+        durationSeconds: v.duration_seconds || 5,
+        createdAt: v.created_at,
+      };
+    });
+
+    const allGalleryItems = [...galleryItemsFromPhotos, ...standaloneItems];
+
     return NextResponse.json({
       success: true,
       event: {
@@ -181,7 +215,7 @@ export async function GET(request: Request) {
         event_date: event.event_date,
         coverPublicUrl: coverPublicUrl,
       },
-      items: galleryItems,
+      items: allGalleryItems,
     });
   } catch (err: any) {
     console.error('Error in gallery API:', err);
