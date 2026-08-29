@@ -54,6 +54,8 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
 
   // Final Composited Image
   const [compositedImage, setCompositedImage] = useState<string | null>(null);
+  const compositedImageRef = useRef<string | null>(null);
+  const capturedSnapshotsRef = useRef<string[]>([]);
   const [processingComposite, setProcessingComposite] = useState(false);
 
   // Guest Details & Guestbook
@@ -304,6 +306,7 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
         setCapturedSnapshots((prev) => {
           const updated = [...prev];
           updated[targetSlotIndex] = dataUrl;
+          capturedSnapshotsRef.current = updated;
           return updated;
         });
       }
@@ -315,24 +318,30 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
 
   // Retake a specific photo by index (0-based)
   const handleRetakePhotoSlot = (slotIndex: number) => {
-    setCapturedSnapshots((prev) => prev.filter((_, idx) => idx !== slotIndex));
+    setCapturedSnapshots((prev) => {
+      const updated = prev.filter((_, idx) => idx !== slotIndex);
+      capturedSnapshotsRef.current = updated;
+      return updated;
+    });
     setCurrentPhotoIndex(slotIndex + 1);
   };
 
   // Generate Final Composited Photo with Event PNG Frame
   const handleProceedToComposite = async () => {
-    if (!event || capturedSnapshots.length === 0) return;
+    const targetPhotos = capturedSnapshots.length > 0 ? capturedSnapshots : capturedSnapshotsRef.current;
+    if (!event || targetPhotos.length === 0) return;
     setProcessingComposite(true);
     try {
       stopCamera();
       const finalImageBase64 = await createFinalPhotoComposite({
-        photos: capturedSnapshots,
+        photos: targetPhotos,
         frameImageUrl: framePublicUrl,
         eventName: event.name,
         eventDate: event.event_date,
         photoCount: event.photo_count || 4,
       });
 
+      compositedImageRef.current = finalImageBase64;
       setCompositedImage(finalImageBase64);
       setStep(3); // Go to Result Step
     } catch (err) {
@@ -477,6 +486,22 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
         });
       }
 
+      let targetPhotoBase64 = compositedImage || compositedImageRef.current;
+
+      if (!targetPhotoBase64 && capturedSnapshotsRef.current.length > 0) {
+        try {
+          targetPhotoBase64 = await createFinalPhotoComposite({
+            photos: capturedSnapshotsRef.current,
+            frameImageUrl: framePublicUrl,
+            eventName: event.name,
+            eventDate: event.event_date,
+            photoCount: event.photo_count || 4,
+          });
+        } catch (e) {
+          console.warn('Fallback composite generation:', e);
+        }
+      }
+
       const res = await fetch('/api/guest/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -484,7 +509,7 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
           eventId: event.id,
           guestName: guestName.trim() || 'Tamu Istimewa',
           wishes: guestNote.trim() || null,
-          photoBase64: compositedImage || null,
+          photoBase64: targetPhotoBase64 || null,
           voiceBase64: voiceBase64,
           voiceMimeType: recordedMimeType,
           durationSeconds: recordingTime > 0 ? recordingTime : 0,
