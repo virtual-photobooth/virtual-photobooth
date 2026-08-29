@@ -62,53 +62,60 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
   let slots: Array<{ x: number; y: number; w: number; h: number }> = [];
 
   if (frameImg) {
-    // Auto-detect top & bottom frame border paddings from PNG alpha transparency
-    const { topPad, bottomPad } = detectFramePaddings(frameImg, canvasWidth, canvasHeight);
+    // Try auto-detecting transparent cutout windows pixel-by-pixel first
+    const autoDetectedSlots = detectCutoutWindows(frameImg, canvasWidth, canvasHeight, photoCount);
 
-    if (photoCount === 2) {
-      // Respect frame border paddings for 2-photo layout so photos sit perfectly inside frame cutouts
-      const paddingX = 140;
-      const paddingTop = Math.max(topPad, 280);
-      const bottomPadding = Math.max(bottomPad, 320);
-      const gap = 80;
-      const availableH = canvasHeight - paddingTop - bottomPadding - gap;
-      const cellH = Math.floor(availableH / 2);
-      const cellW = canvasWidth - paddingX * 2;
-
-      slots = [
-        { x: paddingX, y: paddingTop, w: cellW, h: cellH },
-        { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
-      ];
-    } else if (photoCount === 3) {
-      const h3 = canvasHeight / 3;
-      slots = [
-        { x: 0, y: 0, w: canvasWidth, h: h3 },
-        { x: 0, y: h3, w: canvasWidth, h: h3 },
-        { x: 0, y: h3 * 2, w: canvasWidth, h: h3 },
-      ];
-    } else if (photoCount === 4) {
-      const w2 = canvasWidth / 2;
-      const h2 = canvasHeight / 2;
-      slots = [
-        { x: 0, y: 0, w: w2, h: h2 },
-        { x: w2, y: 0, w: w2, h: h2 },
-        { x: 0, y: h2, w: w2, h: h2 },
-        { x: w2, y: h2, w: w2, h: h2 },
-      ];
+    if (autoDetectedSlots && autoDetectedSlots.length === photoCount) {
+      slots = autoDetectedSlots;
     } else {
-      const cols = photoCount > 2 ? 2 : 1;
-      const rows = Math.ceil(photoCount / cols);
-      const cellW = canvasWidth / cols;
-      const cellH = canvasHeight / rows;
-      for (let i = 0; i < photoCount; i++) {
-        const r = Math.floor(i / cols);
-        const c = i % cols;
-        slots.push({
-          x: c * cellW,
-          y: r * cellH,
-          w: cellW,
-          h: cellH,
-        });
+      // Precise fallback layout matching standard 2:3 portrait photobooth PNG templates
+      const { topPad, bottomPad } = detectFramePaddings(frameImg, canvasWidth, canvasHeight);
+
+      if (photoCount === 2) {
+        // 2-Photo Layout: Top header ~440px, Bottom title banner ~560px, Gap 100px
+        const paddingX = 140;
+        const paddingTop = Math.max(topPad, 440);
+        const bottomPadding = Math.max(bottomPad, 560);
+        const gap = 100;
+        const availableH = canvasHeight - paddingTop - bottomPadding - gap;
+        const cellH = Math.max(Math.floor(availableH / 2), 900);
+        const cellW = canvasWidth - paddingX * 2;
+
+        slots = [
+          { x: paddingX, y: paddingTop, w: cellW, h: cellH },
+          { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
+        ];
+      } else if (photoCount === 3) {
+        const h3 = canvasHeight / 3;
+        slots = [
+          { x: 0, y: 0, w: canvasWidth, h: h3 },
+          { x: 0, y: h3, w: canvasWidth, h: h3 },
+          { x: 0, y: h3 * 2, w: canvasWidth, h: h3 },
+        ];
+      } else if (photoCount === 4) {
+        const w2 = canvasWidth / 2;
+        const h2 = canvasHeight / 2;
+        slots = [
+          { x: 0, y: 0, w: w2, h: h2 },
+          { x: w2, y: 0, w: w2, h: h2 },
+          { x: 0, y: h2, w: w2, h: h2 },
+          { x: w2, y: h2, w: w2, h: h2 },
+        ];
+      } else {
+        const cols = photoCount > 2 ? 2 : 1;
+        const rows = Math.ceil(photoCount / cols);
+        const cellW = canvasWidth / cols;
+        const cellH = canvasHeight / rows;
+        for (let i = 0; i < photoCount; i++) {
+          const r = Math.floor(i / cols);
+          const c = i % cols;
+          slots.push({
+            x: c * cellW,
+            y: r * cellH,
+            w: cellW,
+            h: cellH,
+          });
+        }
       }
     }
   } else {
