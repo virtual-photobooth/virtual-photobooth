@@ -20,6 +20,15 @@ export async function POST(request: Request) {
     const supabaseAdmin = createAdminClient();
     const finalGuestName = (guestName || 'Tamu Istimewa').trim();
 
+    // STEP 0: Ensure Event is ACTIVE & is_voice_enabled=true FIRST so RLS allows inserts into guests, photos, and voice_messages
+    try {
+      await (supabaseAdmin.from('events') as any)
+        .update({ status: 'active', is_voice_enabled: true })
+        .eq('id', eventId);
+    } catch (e) {
+      console.warn('Failed to update event status to active:', e);
+    }
+
     // 1. Insert Guest into `guests` table
     let newGuest: any = null;
 
@@ -30,6 +39,10 @@ export async function POST(request: Request) {
       })
       .select()
       .single();
+
+    if (err1) {
+      console.error('Insert guest DB error:', err1.message);
+    }
 
     if (!err1 && insertedGuest) {
       newGuest = insertedGuest;
@@ -49,6 +62,7 @@ export async function POST(request: Request) {
     const guestId = newGuest?.id || null;
     let photoPath = null;
     let voicePath = null;
+    let voiceErrorMsg: string | null = null;
 
     // 2. Process & Upload Photo to Storage and `photos` table
     if (photoBase64) {
@@ -81,15 +95,6 @@ export async function POST(request: Request) {
         console.error('Photo processing error:', pErr);
       }
     }
-
-    // Ensure event is active and has voice enabled so RLS policies never block insertion
-    try {
-      await (supabaseAdmin.from('events') as any)
-        .update({ is_voice_enabled: true, status: 'active' })
-        .eq('id', eventId);
-    } catch (e) {}
-
-    let voiceErrorMsg: string | null = null;
 
     // 3. Process & Upload Voice Audio to Storage and `voice_messages` table
     if (voiceBase64) {
