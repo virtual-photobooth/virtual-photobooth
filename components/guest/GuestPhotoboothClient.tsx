@@ -457,7 +457,11 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
 
     if (recordingVoice) {
       stopVoiceRecording();
-      await new Promise((r) => setTimeout(r, 300));
+      // Wait for MediaRecorder onstop callback to finalize blob
+      for (let i = 0; i < 10; i++) {
+        if (latestVoiceBlobRef.current || voiceBlob) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
     }
 
     try {

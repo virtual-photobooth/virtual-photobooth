@@ -102,11 +102,25 @@ export async function POST(request: Request) {
           voicePath = filename;
         }
 
+        // Calculate voice retention expires_at date (default 7 days)
+        let retentionDays = 7;
+        const { data: eventData } = await (supabaseAdmin.from('events') as any)
+          .select('voice_retention_days')
+          .eq('id', eventId)
+          .maybeSingle();
+
+        if (eventData?.voice_retention_days) {
+          retentionDays = Number(eventData.voice_retention_days);
+        }
+
+        const expiresAtDate = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000).toISOString();
+
         const { error: insertVoiceErr } = await (supabaseAdmin.from('voice_messages') as any).insert({
           event_id: eventId,
           guest_id: guestId,
           audio_path: voicePath || filename,
           duration_seconds: durationSeconds ? Number(durationSeconds) : 5,
+          expires_at: expiresAtDate,
         });
 
         if (insertVoiceErr) {
