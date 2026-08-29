@@ -590,8 +590,8 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
               </p>
             </div>
 
-            {/* Bottom Start Photobooth & Gallery Buttons */}
-            <div className="w-full pt-1 z-10 space-y-2">
+            {/* Bottom Start Photobooth Button */}
+            <div className="w-full pt-1 z-10">
               <button
                 onClick={() => {
                   setStep(2);
@@ -602,14 +602,6 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
                 <Camera className="w-4 h-4 text-[#D4A373]" />
                 <span>START PHOTOBOOTH</span>
               </button>
-
-              <Link
-                href={`/event/${encodeURIComponent(event.slug)}/gallery`}
-                className="w-full py-3 px-6 rounded-full bg-[#F4EFE6] hover:bg-[#E8E1D5] text-[#2C2A29] font-bold text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 cursor-pointer border border-[#E2D9CC] block text-center"
-              >
-                <ImageIcon className="w-4 h-4 text-[#8C6D46]" />
-                <span>LIHAT GALERI ACARA</span>
-              </Link>
             </div>
           </div>
         </div>
