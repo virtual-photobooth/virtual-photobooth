@@ -297,33 +297,16 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         );
       }
 
-      // 3. Update database record with monogram, subtitle, frame_path & cover_path
-      const updatePayload: any = {
-        client_id: formData.client_id,
-        name: formData.name,
-        monogram: formData.monogram ?? '',
-        subtitle: formData.subtitle ?? '',
-        slug: formData.slug,
-        event_date: formData.event_date,
-        status: formData.status,
-        photo_count: Number(formData.photo_count),
-        countdown_seconds: Number(formData.countdown_seconds),
-        is_voice_enabled: formData.is_voice_enabled,
-        voice_retention_days: Number(formData.voice_retention_days),
-        frame_path: frameStoragePath,
-        cover_path: coverStoragePath,
-      };
-
-      let { error: updateErr } = await (supabase.from('events') as any)
-        .update(updatePayload)
-        .eq('id', eventId);
-
-      if (updateErr) {
-        console.warn('DB update failed (missing schema columns in DB), falling back to core schema payload:', updateErr);
-        // Strip optional/schema-extended columns if DB schema cache has not added them
-        const safePayload: any = {
+      // 3. Update database record via admin API endpoint
+      const res = await fetch('/api/admin/events', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: eventId,
           client_id: formData.client_id,
           name: formData.name,
+          monogram: formData.monogram ?? '',
+          subtitle: formData.subtitle ?? '',
           slug: formData.slug,
           event_date: formData.event_date,
           status: formData.status,
@@ -332,13 +315,13 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           is_voice_enabled: formData.is_voice_enabled,
           voice_retention_days: Number(formData.voice_retention_days),
           frame_path: frameStoragePath,
-        };
+          cover_path: coverStoragePath,
+        }),
+      });
 
-        const { error: safeErr } = await (supabase.from('events') as any)
-          .update(safePayload)
-          .eq('id', eventId);
-
-        if (safeErr) throw safeErr;
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.message || 'Failed to update event');
       }
 
       // Update local event state immediately

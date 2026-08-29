@@ -109,49 +109,30 @@ export default function CreateEventPage() {
         targetClientId = resData.client.id;
       }
 
-      // Check slug uniqueness
-      const { data: existing } = await (supabase.from('events') as any)
-        .select('id')
-        .eq('slug', formData.slug)
-        .single();
+      const res = await fetch('/api/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: targetClientId,
+          name: formData.name,
+          monogram: formData.monogram || 'WE',
+          slug: formData.slug,
+          event_date: formData.event_date,
+          status: formData.status,
+          photo_count: Number(formData.photo_count),
+          countdown_seconds: Number(formData.countdown_seconds),
+          is_voice_enabled: formData.is_voice_enabled,
+          voice_retention_days: Number(formData.voice_retention_days),
+        }),
+      });
 
-      if (existing) {
-        throw new Error(`The slug "${formData.slug}" is already taken by another event. Please use another name or slug.`);
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.message || 'Failed to create event');
       }
 
-      const insertPayload: any = {
-        client_id: targetClientId,
-        name: formData.name,
-        monogram: formData.monogram ?? '',
-        slug: formData.slug,
-        event_date: formData.event_date,
-        status: formData.status,
-        photo_count: Number(formData.photo_count),
-        countdown_seconds: Number(formData.countdown_seconds),
-        is_voice_enabled: formData.is_voice_enabled,
-        voice_retention_days: Number(formData.voice_retention_days),
-      };
-
-      let { data, error: insertError } = await (supabase.from('events') as any)
-        .insert(insertPayload)
-        .select()
-        .single();
-
-      // Retry without monogram or subtitle if columns haven't been added to DB schema yet
-      if (insertError) {
-        delete insertPayload.monogram;
-        delete insertPayload.subtitle;
-        const { data: retryData, error: retryError } = await (supabase.from('events') as any)
-          .insert(insertPayload)
-          .select()
-          .single();
-
-        if (retryError) throw retryError;
-        data = retryData;
-      }
-
-      if (data) {
-        router.push(`/admin/events/${data.id}/edit`);
+      if (resData.event) {
+        router.push(`/admin/events/${resData.event.id}/edit`);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to create event');
