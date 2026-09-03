@@ -14,6 +14,8 @@ import {
   Check,
   Zap,
   ZapOff,
+  Timer,
+  TimerOff,
   Mic,
   Square,
   Play,
@@ -44,6 +46,7 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
   // Camera & Capture State
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [flashEnabled, setFlashEnabled] = useState(false);
+  const [timerEnabled, setTimerEnabled] = useState(true);
   const [screenFlash, setScreenFlash] = useState(false);
   const [capturedSnapshots, setCapturedSnapshots] = useState<string[]>([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<number>(1);
@@ -266,6 +269,10 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
     }
   };
 
+  const toggleTimer = () => {
+    setTimerEnabled((prev) => !prev);
+  };
+
   // Trigger Single Photo Capture with Manual Control
   const handleCaptureSinglePhoto = async () => {
     if (!event || capturing) return;
@@ -276,18 +283,20 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
     const targetSlotIndex = capturedSnapshots.length;
     const initialCountdown = event.countdown_seconds || 3;
 
-    // Countdown loop for current single photo
-    for (let c = initialCountdown; c > 0; c--) {
-      setCountdown(c);
-      await new Promise((r) => setTimeout(r, 1000));
+    // Countdown loop for current single photo (only if timer enabled)
+    if (timerEnabled && initialCountdown > 0) {
+      for (let c = initialCountdown; c > 0; c--) {
+        setCountdown(c);
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      setCountdown(0); // CAPTURE flash!
     }
 
-    setCountdown(0); // CAPTURE flash!
     if (flashEnabled) {
       setScreenFlash(true);
       setTimeout(() => setScreenFlash(false), 350);
     }
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, timerEnabled ? 200 : 80));
 
     // Snap frame from video
     if (videoRef.current) {
@@ -646,48 +655,78 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
             <div className="fixed inset-0 bg-white z-[99999] opacity-100 pointer-events-none animate-pulse transition-opacity duration-150" />
           )}
 
-          {/* Top Controls Header (100% Visible on Mobile) */}
-          <div className="w-full flex items-center justify-between z-20 pb-2 px-1 pt-1 shrink-0">
-            {/* Flash Toggle Button */}
-            <button
-              onClick={toggleFlash}
-              disabled={capturing}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-lg transition-all border cursor-pointer active:scale-95 ${
-                flashEnabled
-                  ? 'bg-amber-500 text-white border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.8)] animate-pulse'
-                  : 'bg-[#2C2A29]/90 backdrop-blur-md text-white/90 border-[#E2D9CC]/30 hover:bg-[#1A1817]'
-              }`}
-            >
-              {flashEnabled ? (
-                <>
-                  <Zap className="w-4 h-4 text-white fill-white" />
-                  <span>Flash ON</span>
-                </>
-              ) : (
-                <>
-                  <ZapOff className="w-3.5 h-3.5 text-white/70" />
-                  <span>Flash OFF</span>
-                </>
-              )}
-            </button>
+          {/* Top Controls Header (Clean, Modern & Thumb-Friendly) */}
+          <div className="w-full flex items-center justify-between z-20 pb-2 px-1 pt-1 shrink-0 gap-1.5">
+            {/* Left: Quick Toggles (Flash & Timer) */}
+            <div className="flex items-center gap-1.5">
+              {/* Flash Toggle Button */}
+              <button
+                type="button"
+                onClick={toggleFlash}
+                disabled={capturing}
+                title={flashEnabled ? 'Matikan Flash' : 'Aktifkan Flash'}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-md transition-all border cursor-pointer active:scale-95 disabled:opacity-50 ${
+                  flashEnabled
+                    ? 'bg-amber-500 text-white border-amber-400 shadow-[0_0_16px_rgba(245,158,11,0.6)]'
+                    : 'bg-[#2C2A29]/85 backdrop-blur-md text-white/80 border-[#E2D9CC]/20 hover:bg-[#1A1817]'
+                }`}
+              >
+                {flashEnabled ? (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-white fill-white" />
+                    <span className="text-[11px] font-bold">Flash</span>
+                  </>
+                ) : (
+                  <>
+                    <ZapOff className="w-3.5 h-3.5 text-white/60" />
+                    <span className="text-[11px] text-white/70">Flash</span>
+                  </>
+                )}
+              </button>
 
-            {/* Photo Counter Badge */}
-            <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#8C6D46] bg-[#F4EFE6] px-3 py-1 rounded-full border border-[#E2D9CC] shadow-xs">
-              {capturing
-                ? `Foto ${currentPhotoIndex} / ${event.photo_count}`
-                : `Progress ${capturedSnapshots.length} / ${event.photo_count}`}
+              {/* Timer Toggle Button */}
+              <button
+                type="button"
+                onClick={toggleTimer}
+                disabled={capturing}
+                title={timerEnabled ? `Timer Aktif (${event.countdown_seconds || 3} detik)` : 'Timer Nonaktif (Instan)'}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-md transition-all border cursor-pointer active:scale-95 disabled:opacity-50 ${
+                  timerEnabled
+                    ? 'bg-[#8C6D46] text-white border-[#D4A373]/50 shadow-[0_0_14px_rgba(140,109,70,0.4)]'
+                    : 'bg-[#2C2A29]/85 backdrop-blur-md text-white/60 border-[#E2D9CC]/20 hover:bg-[#1A1817]'
+                }`}
+              >
+                {timerEnabled ? (
+                  <>
+                    <Timer className="w-3.5 h-3.5 text-[#F4EFE6]" />
+                    <span className="text-[11px] font-bold">{event.countdown_seconds || 3}s</span>
+                  </>
+                ) : (
+                  <>
+                    <TimerOff className="w-3.5 h-3.5 text-white/50" />
+                    <span className="text-[11px] font-bold text-white/50">Off</span>
+                  </>
+                )}
+              </button>
             </div>
 
-            {/* Camera Flip Button */}
+            {/* Center: Photo Counter Badge */}
+            <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#8C6D46] bg-[#F4EFE6]/95 backdrop-blur-md px-3 py-1.5 rounded-full border border-[#E2D9CC] shadow-xs">
+              {capturing
+                ? `Foto ${currentPhotoIndex} / ${event.photo_count}`
+                : `Foto ${Math.min(capturedSnapshots.length + 1, event.photo_count || 4)} / ${event.photo_count}`}
+            </div>
+
+            {/* Right: Camera Flip Button */}
             <button
+              type="button"
               onClick={toggleCameraFacing}
               disabled={capturing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#2C2A29]/90 backdrop-blur-md text-white hover:bg-[#1A1817] text-xs font-semibold shadow-md transition-all disabled:opacity-40 cursor-pointer active:scale-95 border border-[#D4A373]/40"
+              title={facingMode === 'user' ? 'Ganti ke Kamera Belakang' : 'Ganti ke Kamera Depan'}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#2C2A29]/85 backdrop-blur-md text-white hover:bg-[#1A1817] text-xs font-semibold shadow-md transition-all disabled:opacity-40 cursor-pointer active:scale-95 border border-[#D4A373]/30"
             >
               <RefreshCw className="w-3.5 h-3.5 text-[#D4A373]" />
-              <span className="tracking-wide">
-                {facingMode === 'user' ? 'Kamera Depan' : 'Kamera Belakang'}
-              </span>
+              <span className="text-[11px] font-medium tracking-wide">Balik</span>
             </button>
           </div>
 
