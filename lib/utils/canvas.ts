@@ -40,45 +40,30 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     )
   );
 
-  // Load custom PNG frame first if available (to auto-detect cutout windows)
+  // Load custom PNG frame with CORS/Blob protection to prevent canvas tainting
   let frameImg: HTMLImageElement | null = null;
   if (frameImageUrl) {
-    frameImg = await new Promise<HTMLImageElement | null>((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = () => {
-        // Fallback without crossOrigin if CORS header fails on mobile Safari
-        const fallbackImg = new Image();
-        fallbackImg.onload = () => resolve(fallbackImg);
-        fallbackImg.onerror = () => resolve(null);
-        fallbackImg.src = frameImageUrl;
-      };
-      img.src = frameImageUrl;
-    });
+    frameImg = await loadFrameImage(frameImageUrl);
   }
 
   // Calculate layout grid based on photo count
   let slots: Array<{ x: number; y: number; w: number; h: number }> = [];
 
   if (frameImg) {
-    // Try auto-detecting transparent cutout windows pixel-by-pixel first
+    // Try auto-detecting transparent cutout windows pixel-by-pixel using 2D component detection
     const autoDetectedSlots = detectCutoutWindows(frameImg, canvasWidth, canvasHeight, photoCount);
 
     if (autoDetectedSlots && autoDetectedSlots.length === photoCount) {
       slots = autoDetectedSlots;
     } else {
-      // Precise fallback layout matching standard 2:3 portrait photobooth PNG templates
-      const { topPad, bottomPad } = detectFramePaddings(frameImg, canvasWidth, canvasHeight);
-
+      // High quality fallback layout matching standard 2:3 portrait photobooth PNG templates
       if (photoCount === 2) {
-        // 2-Photo Layout: Top header ~440px, Bottom title banner ~560px, Gap 100px
-        const paddingX = 140;
-        const paddingTop = Math.max(topPad, 440);
-        const bottomPadding = Math.max(bottomPad, 560);
-        const gap = 100;
+        const paddingX = 120;
+        const paddingTop = 260;
+        const bottomPadding = 300;
+        const gap = 80;
         const availableH = canvasHeight - paddingTop - bottomPadding - gap;
-        const cellH = Math.max(Math.floor(availableH / 2), 900);
+        const cellH = Math.max(Math.floor(availableH / 2), 850);
         const cellW = canvasWidth - paddingX * 2;
 
         slots = [
@@ -86,32 +71,52 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
           { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
         ];
       } else if (photoCount === 3) {
-        const h3 = canvasHeight / 3;
+        const paddingX = 140;
+        const paddingTop = 240;
+        const bottomPadding = 280;
+        const gap = 50;
+        const cellW = canvasWidth - paddingX * 2;
+        const availableH = canvasHeight - paddingTop - bottomPadding - gap * 2;
+        const cellH = Math.max(Math.floor(availableH / 3), 750);
+
         slots = [
-          { x: 0, y: 0, w: canvasWidth, h: h3 },
-          { x: 0, y: h3, w: canvasWidth, h: h3 },
-          { x: 0, y: h3 * 2, w: canvasWidth, h: h3 },
+          { x: paddingX, y: paddingTop, w: cellW, h: cellH },
+          { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
+          { x: paddingX, y: paddingTop + (cellH + gap) * 2, w: cellW, h: cellH },
         ];
       } else if (photoCount === 4) {
-        const w2 = canvasWidth / 2;
-        const h2 = canvasHeight / 2;
+        // Standard 4-photo photobooth 2x2 grid with proper margins and gaps
+        const paddingX = 100;
+        const paddingTop = 280;
+        const bottomPadding = 320;
+        const gapX = 50;
+        const gapY = 60;
+        const cellW = Math.floor((canvasWidth - paddingX * 2 - gapX) / 2);
+        const availableH = canvasHeight - paddingTop - bottomPadding - gapY;
+        const cellH = Math.floor(availableH / 2);
+
         slots = [
-          { x: 0, y: 0, w: w2, h: h2 },
-          { x: w2, y: 0, w: w2, h: h2 },
-          { x: 0, y: h2, w: w2, h: h2 },
-          { x: w2, y: h2, w: w2, h: h2 },
+          { x: paddingX, y: paddingTop, w: cellW, h: cellH },
+          { x: paddingX + cellW + gapX, y: paddingTop, w: cellW, h: cellH },
+          { x: paddingX, y: paddingTop + cellH + gapY, w: cellW, h: cellH },
+          { x: paddingX + cellW + gapX, y: paddingTop + cellH + gapY, w: cellW, h: cellH },
         ];
       } else {
         const cols = photoCount > 2 ? 2 : 1;
         const rows = Math.ceil(photoCount / cols);
-        const cellW = canvasWidth / cols;
-        const cellH = canvasHeight / rows;
+        const paddingX = 120;
+        const paddingTop = 280;
+        const bottomPadding = 300;
+        const gap = 50;
+        const cellW = Math.floor((canvasWidth - paddingX * 2 - gap * (cols - 1)) / cols);
+        const cellH = Math.floor((canvasHeight - paddingTop - bottomPadding - gap * (rows - 1)) / rows);
+
         for (let i = 0; i < photoCount; i++) {
           const r = Math.floor(i / cols);
           const c = i % cols;
           slots.push({
-            x: c * cellW,
-            y: r * cellH,
+            x: paddingX + c * (cellW + gap),
+            y: paddingTop + r * (cellH + gap),
             w: cellW,
             h: cellH,
           });
@@ -176,30 +181,38 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     }
   }
 
-  // Draw photos inside slots (Cover fit)
+  // Draw photos inside slots (Cover fit with 24px bleed tucked under frame borders)
+  const BLEED_PX = frameImg ? 24 : 0;
+
   loadedImages.forEach((img, index) => {
     if (index >= slots.length) return;
     const slot = slots[index];
 
+    // Expand slot with bleed so photo sits under frame borders
+    const targetX = Math.max(0, slot.x - BLEED_PX);
+    const targetY = Math.max(0, slot.y - BLEED_PX);
+    const targetW = Math.min(canvasWidth - targetX, slot.w + BLEED_PX * 2);
+    const targetH = Math.min(canvasHeight - targetY, slot.h + BLEED_PX * 2);
+
     ctx.save();
     ctx.beginPath();
-    ctx.rect(slot.x, slot.y, slot.w, slot.h);
+    ctx.rect(targetX, targetY, targetW, targetH);
     ctx.clip();
 
-    // Calculate object-fit cover
+    // Calculate object-fit cover based on target render area
     const imgRatio = img.width / img.height;
-    const slotRatio = slot.w / slot.h;
-    let renderW = slot.w;
-    let renderH = slot.h;
-    let renderX = slot.x;
-    let renderY = slot.y;
+    const targetRatio = targetW / targetH;
+    let renderW = targetW;
+    let renderH = targetH;
+    let renderX = targetX;
+    let renderY = targetY;
 
-    if (imgRatio > slotRatio) {
-      renderW = slot.h * imgRatio;
-      renderX = slot.x - (renderW - slot.w) / 2;
+    if (imgRatio > targetRatio) {
+      renderW = targetH * imgRatio;
+      renderX = targetX - (renderW - targetW) / 2;
     } else {
-      renderH = slot.w / imgRatio;
-      renderY = slot.y - (renderH - slot.h) / 2;
+      renderH = targetW / imgRatio;
+      renderY = targetY - (renderH - targetH) / 2;
     }
 
     ctx.drawImage(img, renderX, renderY, renderW, renderH);
@@ -214,6 +227,41 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
   }
 
   return canvas.toDataURL('image/jpeg', 0.85);
+}
+
+/**
+ * Robust cross-origin image loader that converts image to a Blob URL
+ * to avoid canvas tainting issues on Safari iOS and Chrome.
+ */
+async function loadFrameImage(url: string): Promise<HTMLImageElement | null> {
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (res.ok) {
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      return await new Promise<HTMLImageElement | null>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = blobUrl;
+      });
+    }
+  } catch (err) {
+    console.warn('Frame blob fetch failed, trying direct Image load:', err);
+  }
+
+  return new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      const fallbackImg = new Image();
+      fallbackImg.onload = () => resolve(fallbackImg);
+      fallbackImg.onerror = () => resolve(null);
+      fallbackImg.src = url;
+    };
+    img.src = url;
+  });
 }
 
 function drawDefaultBranding(
@@ -240,138 +288,133 @@ function drawDefaultBranding(
   ctx.fillText(eventDate, canvasWidth / 2, bottomY + 80);
 }
 
+/**
+ * 2D Connected-Component (Blob) detection of transparent cutout windows.
+ * Accurately detects 2-photo (vertical/horizontal) and 4-photo (2x2 grid or 1x4 vertical strip)
+ * windows regardless of overlapping decorations, Barong masks, balloons, or typography.
+ */
 function detectCutoutWindows(
   frameImg: HTMLImageElement,
-  width: number,
-  height: number,
+  canvasWidth: number,
+  canvasHeight: number,
   expectedCount: number
 ): Array<{ x: number; y: number; w: number; h: number }> | null {
   try {
+    // We downsample to a fine 216 x 324 grid (matching 2:3 aspect ratio)
+    // for ultra-fast (sub-20ms) and noise-free 2D analysis.
+    const gridW = 216;
+    const gridH = 324;
     const offCanvas = document.createElement('canvas');
-    offCanvas.width = width;
-    offCanvas.height = height;
-    const offCtx = offCanvas.getContext('2d');
+    offCanvas.width = gridW;
+    offCanvas.height = gridH;
+    const offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
     if (!offCtx) return null;
 
-    offCtx.drawImage(frameImg, 0, 0, width, height);
-    const imgData = offCtx.getImageData(0, 0, width, height);
+    offCtx.drawImage(frameImg, 0, 0, gridW, gridH);
+    const imgData = offCtx.getImageData(0, 0, gridW, gridH);
     const data = imgData.data;
 
-    const isTransparentRow = new Array(height);
-    for (let y = 0; y < height; y++) {
-      let transparentCount = 0;
-      const samples = 20;
-      for (let s = 0; s < samples; s++) {
-        const x = Math.floor(width * 0.25 + (width * 0.5 * s) / samples);
-        const alpha = data[(y * width + x) * 4 + 3];
-        if (alpha < 100) transparentCount++;
-      }
-      isTransparentRow[y] = transparentCount > samples * 0.5;
-    }
-
-    const yRanges: Array<{ yMin: number; yMax: number }> = [];
-    let inRange = false;
-    let startY = 0;
-
-    for (let y = 0; y < height; y++) {
-      if (isTransparentRow[y] && !inRange) {
-        inRange = true;
-        startY = y;
-      } else if (!isTransparentRow[y] && inRange) {
-        inRange = false;
-        if (y - startY > 150) {
-          yRanges.push({ yMin: startY, yMax: y });
-        }
+    // Binary transparency grid (alpha < 128 considered transparent cutout)
+    const isTransparent = new Uint8Array(gridW * gridH);
+    for (let i = 0; i < gridW * gridH; i++) {
+      if (data[i * 4 + 3] < 128) {
+        isTransparent[i] = 1;
       }
     }
-    if (inRange && height - startY > 150) {
-      yRanges.push({ yMin: startY, yMax: height });
-    }
 
-    if (yRanges.length === expectedCount) {
-      const detected: Array<{ x: number; y: number; w: number; h: number }> = [];
-      for (const r of yRanges) {
-        const midY = Math.floor((r.yMin + r.yMax) / 2);
-        let xMin = width;
-        let xMax = 0;
+    // 2D Connected Component Labeling via Breadth-First Search (BFS)
+    const visited = new Uint8Array(gridW * gridH);
+    const rawComponents: Array<{
+      minGx: number;
+      maxGx: number;
+      minGy: number;
+      maxGy: number;
+      count: number;
+    }> = [];
 
-        for (let x = 0; x < width; x += 5) {
-          const alpha = data[(midY * width + x) * 4 + 3];
-          if (alpha < 100) {
-            if (x < xMin) xMin = x;
-            if (x > xMax) xMax = x;
+    // Minimum area threshold: at least 1.5% of total grid for 4 photos, 2% for 2 photos
+    const minThreshold = (gridW * gridH) * (expectedCount > 2 ? 0.015 : 0.02);
+
+    for (let gy = 0; gy < gridH; gy++) {
+      for (let gx = 0; gx < gridW; gx++) {
+        const idx = gy * gridW + gx;
+        if (isTransparent[idx] === 1 && !visited[idx]) {
+          let minGx = gx;
+          let maxGx = gx;
+          let minGy = gy;
+          let maxGy = gy;
+          let count = 0;
+          const queue: number[] = [gx, gy];
+          visited[idx] = 1;
+          let head = 0;
+
+          while (head < queue.length) {
+            const cx = queue[head++];
+            const cy = queue[head++];
+            count++;
+            if (cx < minGx) minGx = cx;
+            if (cx > maxGx) maxGx = cx;
+            if (cy < minGy) minGy = cy;
+            if (cy > maxGy) maxGy = cy;
+
+            const neighbors: Array<[number, number]> = [
+              [cx + 1, cy],
+              [cx - 1, cy],
+              [cx, cy + 1],
+              [cx, cy - 1],
+            ];
+            for (const [nx, ny] of neighbors) {
+              if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
+                const nidx = ny * gridW + nx;
+                if (isTransparent[nidx] === 1 && !visited[nidx]) {
+                  visited[nidx] = 1;
+                  queue.push(nx, ny);
+                }
+              }
+            }
+          }
+
+          if (count >= minThreshold) {
+            rawComponents.push({ minGx, maxGx, minGy, maxGy, count });
           }
         }
-
-        if (xMin < xMax && xMax - xMin > 200) {
-          detected.push({
-            x: xMin,
-            y: r.yMin,
-            w: xMax - xMin,
-            h: r.yMax - r.yMin,
-          });
-        }
-      }
-
-      if (detected.length === expectedCount) {
-        return detected;
       }
     }
-  } catch (e) {
-    console.warn('Auto cutout detection skipped:', e);
-  }
-  return null;
-}
 
-function detectFramePaddings(
-  frameImg: HTMLImageElement,
-  canvasWidth: number,
-  canvasHeight: number
-): { topPad: number; bottomPad: number } {
-  let topPad = 140;
-  let bottomPad = 140;
+    if (rawComponents.length === 0) return null;
 
-  try {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = canvasWidth;
-    tempCanvas.height = canvasHeight;
-    const ctx = tempCanvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
-      const imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
-      const data = imgData.data;
-
-      // Find first transparent row from top
-      for (let y = 0; y < Math.floor(canvasHeight / 4); y++) {
-        let transparentCount = 0;
-        const centerX = Math.floor(canvasWidth / 2);
-        for (let x = centerX - 200; x <= centerX + 200; x += 20) {
-          const alpha = data[(y * canvasWidth + x) * 4 + 3];
-          if (alpha < 100) transparentCount++;
-        }
-        if (transparentCount > 5) {
-          topPad = Math.max(y, 140);
-          break;
-        }
-      }
-
-      // Find first transparent row from bottom
-      for (let y = canvasHeight - 1; y > Math.floor((canvasHeight * 3) / 4); y--) {
-        let transparentCount = 0;
-        const centerX = Math.floor(canvasWidth / 2);
-        for (let x = centerX - 200; x <= centerX + 200; x += 20) {
-          const alpha = data[(y * canvasWidth + x) * 4 + 3];
-          if (alpha < 100) transparentCount++;
-        }
-        if (transparentCount > 5) {
-          bottomPad = Math.max(canvasHeight - y, 140);
-          break;
-        }
-      }
+    let candidates = rawComponents;
+    // If more components than expected (e.g. tiny decorative cuts), take largest by area
+    if (candidates.length > expectedCount) {
+      candidates.sort((a, b) => b.count - a.count);
+      candidates = candidates.slice(0, expectedCount);
     }
-  } catch (e) {
-    console.warn('Frame padding detection fallback:', e);
-  }
 
-  return { topPad, bottomPad };
+    if (candidates.length !== expectedCount) {
+      return null;
+    }
+
+    // Sort detected components in natural reading order: Top-to-bottom, Left-to-right
+    const rowTolerance = (gridH / (expectedCount > 2 ? 4 : 2)) * 0.45;
+    candidates.sort((a, b) => {
+      if (Math.abs(a.minGy - b.minGy) > rowTolerance) {
+        return a.minGy - b.minGy;
+      }
+      return a.minGx - b.minGx;
+    });
+
+    // Map grid coordinates back to full 2160x3240 canvas dimensions
+    const slots = candidates.map((c) => {
+      const x = Math.round((c.minGx / gridW) * canvasWidth);
+      const y = Math.round((c.minGy / gridH) * canvasHeight);
+      const w = Math.round(((c.maxGx - c.minGx + 1) / gridW) * canvasWidth);
+      const h = Math.round(((c.maxGy - c.minGy + 1) / gridH) * canvasHeight);
+      return { x, y, w, h };
+    });
+
+    return slots;
+  } catch (e) {
+    console.warn('Auto cutout detection skipped or error:', e);
+    return null;
+  }
 }
