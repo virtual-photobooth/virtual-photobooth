@@ -16,8 +16,16 @@ import {
   Share2,
   Download,
   Heart,
+  Film,
+  FolderArchive,
 } from 'lucide-react';
 import Link from 'next/link';
+import {
+  batchDownloadGallery,
+  exportPhotoWithAudioToVideo,
+  downloadImageDirectly,
+  downloadBlob,
+} from '@/lib/utils/media-export';
 
 interface GalleryItem {
   id: string;
@@ -84,6 +92,21 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
     fetchGallery();
   }, [slug]);
 
+  // Batch Download State
+  const [isBatchDownloading, setIsBatchDownloading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({
+    current: 0,
+    total: 0,
+    message: '',
+    percent: 0,
+  });
+  const batchCancelRef = useRef(false);
+
+  // Single Item Export State
+  const [isSingleExporting, setIsSingleExporting] = useState(false);
+  const [singleExportProgress, setSingleExportProgress] = useState(0);
+  const [singleDownloadError, setSingleDownloadError] = useState<string | null>(null);
+
   // Audio Handler when selected item changes or audio plays
   useEffect(() => {
     // Reset audio when modal closes or item changes
@@ -149,14 +172,78 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
     return `${mm}:${ss}`;
   };
 
-  const downloadPhoto = (url: string, guestName: string) => {
-    if (!url) return;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `photobooth-${guestName.replace(/\s+/g, '_')}-${Date.now()}.jpg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleDownloadSinglePhoto = async (item: GalleryItem) => {
+    try {
+      const cleanName = (item.guestName || 'Tamu').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_');
+      await downloadImageDirectly(item.photoUrl, `photobooth-${cleanName}-${Date.now()}.jpg`);
+    } catch (err: any) {
+      console.warn('Direct blob download failed, trying fallback link:', err);
+      const a = document.createElement('a');
+      a.href = item.photoUrl;
+      a.download = `photobooth-${item.guestName.replace(/\s+/g, '_')}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  };
+
+  const handleDownloadSingleVideo = async (item: GalleryItem) => {
+    if (!item.voiceUrl || isSingleExporting) return;
+    setIsSingleExporting(true);
+    setSingleExportProgress(0);
+    setSingleDownloadError(null);
+
+    try {
+      const { blob, ext } = await exportPhotoWithAudioToVideo(
+        item.photoUrl,
+        item.voiceUrl,
+        (pct) => setSingleExportProgress(pct)
+      );
+      const cleanName = (item.guestName || 'Tamu').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_');
+      downloadBlob(blob, `photobooth-${cleanName}-video.${ext}`);
+    } catch (err: any) {
+      console.error('Export video error:', err);
+      setSingleDownloadError(err.message || 'Gagal memproses video bersuara.');
+    } finally {
+      setIsSingleExporting(false);
+    }
+  };
+
+  const handleBatchDownload = async () => {
+    if (items.length === 0 || isBatchDownloading) return;
+    setIsBatchDownloading(true);
+    setBatchProgress({
+      current: 0,
+      total: items.length,
+      message: 'Menyiapkan arsip kenangan...',
+      percent: 0,
+    });
+    batchCancelRef.current = false;
+
+    try {
+      await batchDownloadGallery(
+        items,
+        event?.name || 'Wedding',
+        (info) => setBatchProgress(info),
+        () => batchCancelRef.current
+      );
+    } catch (err: any) {
+      if (err.message?.includes('dibatalkan')) {
+        console.log('Batch download dibatalkan pengguna');
+      } else {
+        console.error('Batch download error:', err);
+        alert(err.message || 'Gagal mengunduh semua file kenangan.');
+      }
+    } finally {
+      setTimeout(() => {
+        setIsBatchDownloading(false);
+      }, 1000);
+    }
+  };
+
+  const handleCancelBatchDownload = () => {
+    batchCancelRef.current = true;
+    setIsBatchDownloading(false);
   };
 
   if (loading) {
@@ -233,10 +320,32 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
           <p className="text-xs sm:text-sm text-[#78716C] font-serif italic max-w-md mx-auto">
             Kumpulan momen kenangan manis & ucapan hangat dari para tamu terkasih
           </p>
-          <div className="pt-2">
-            <span className="text-[10px] uppercase tracking-widest font-extrabold text-[#8C6D46] bg-[#F4EFE6] px-3.5 py-1 rounded-full border border-[#E2D9CC]">
-              {items.length} Kenangan Tersimpan
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
+            <span className="text-[10px] uppercase tracking-widest font-extrabold text-[#8C6D46] bg-[#F4EFE6] px-3.5 py-2 rounded-full border border-[#E2D9CC] inline-flex items-center gap-1.5 shadow-xs">
+              <Sparkles className="w-3 h-3 text-[#D4A373]" />
+              <span>{items.length} Kenangan Tersimpan</span>
             </span>
+
+            {items.length > 0 && (
+              <button
+                onClick={handleBatchDownload}
+                disabled={isBatchDownloading}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-[#F9F6F0] text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-lg transition-all border border-[#D4A373]/30 cursor-pointer active:scale-95 disabled:opacity-50"
+                title="Unduh seluruh foto dan video kenangan sekaligus dalam format ZIP"
+              >
+                {isBatchDownloading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D4A373]" />
+                    <span>Memproses ({batchProgress.percent}%)...</span>
+                  </>
+                ) : (
+                  <>
+                    <FolderArchive className="w-3.5 h-3.5 text-[#D4A373]" />
+                    <span>Unduh Semua (ZIP)</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -323,7 +432,10 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
               </div>
 
               <button
-                onClick={() => setSelectedItem(null)}
+                onClick={() => {
+                  setSelectedItem(null);
+                  setSingleDownloadError(null);
+                }}
                 className="px-3.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold tracking-widest uppercase transition-all border border-white/20 cursor-pointer active:scale-95"
               >
                 TUTUP
@@ -366,7 +478,7 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
                       <span
                         key={idx}
                         style={{
-                          height: isPlaying ? `${Math.max(20, (heightPct * (idx % 2 === 0 ? 1 : 0.7)))}%` : '35%',
+                          height: isPlaying ? `${Math.max(20, heightPct * (idx % 2 === 0 ? 1 : 0.7))}%` : '35%',
                         }}
                         className={`w-1 sm:w-1.5 rounded-full transition-all duration-200 ${
                           isPlaying ? 'bg-[#8C6D46] animate-pulse' : 'bg-[#8C6D46]/40'
@@ -400,15 +512,103 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
                 </p>
               </div>
 
-              {/* Download Photo Action Button */}
-              <button
-                onClick={() => downloadPhoto(selectedItem.photoUrl, selectedItem.guestName)}
-                className="w-full py-3 px-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 border border-white/20 cursor-pointer active:scale-95"
-              >
-                <Download className="w-3.5 h-3.5 text-[#D4A373]" />
-                <span>Download Photo</span>
-              </button>
+              {/* Error notification if any */}
+              {singleDownloadError && (
+                <div className="w-full bg-rose-500/20 border border-rose-500/40 rounded-xl p-2.5 text-center text-[11px] text-rose-300">
+                  {singleDownloadError}
+                </div>
+              )}
+
+              {/* Download Action Buttons */}
+              {selectedItem.voiceUrl ? (
+                <div className="w-full space-y-2 pt-1">
+                  {/* Primary: Download Video MP4 + Voice Note */}
+                  <button
+                    onClick={() => handleDownloadSingleVideo(selectedItem)}
+                    disabled={isSingleExporting}
+                    className="w-full py-3 px-4 rounded-full bg-gradient-to-r from-[#D4A373] to-[#B88746] hover:from-[#C5925F] hover:to-[#A77838] text-[#1A1817] font-bold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer active:scale-95 disabled:opacity-75"
+                  >
+                    {isSingleExporting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-[#1A1817]" />
+                        <span>Membuat Video ({singleExportProgress}%)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Film className="w-4 h-4 text-[#1A1817]" />
+                        <span>Download Video (MP4 + Suara)</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Secondary: Download Photo Only */}
+                  <button
+                    onClick={() => handleDownloadSinglePhoto(selectedItem)}
+                    disabled={isSingleExporting}
+                    className="w-full py-2.5 px-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-semibold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 border border-white/20 cursor-pointer active:scale-95"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#D4A373]" />
+                    <span>Download Foto Saja (JPG)</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleDownloadSinglePhoto(selectedItem)}
+                  className="w-full py-3 px-4 rounded-full bg-[#D4A373] hover:bg-[#C5925F] text-[#1A1817] font-bold text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer active:scale-95"
+                >
+                  <Download className="w-4 h-4 text-[#1A1817]" />
+                  <span>Download Foto (JPG)</span>
+                </button>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PROSES BATCH DOWNLOAD ZIP */}
+      {isBatchDownloading && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="relative w-full max-w-sm bg-[#2C2A29] rounded-[2rem] shadow-2xl p-6 border border-[#423E3C] text-white flex flex-col items-center text-center">
+            {/* Soft Glow Circles */}
+            <div className="absolute -top-10 -left-10 w-32 h-32 bg-[#D4A373]/15 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-[#8C6D46]/20 rounded-full blur-2xl pointer-events-none" />
+
+            {/* Top Icon Badge */}
+            <div className="w-14 h-14 rounded-2xl bg-[#D4A373]/20 border border-[#D4A373]/40 flex items-center justify-center text-[#D4A373] mb-4 shadow-lg">
+              <FolderArchive className="w-7 h-7 animate-bounce" />
+            </div>
+
+            <span className="text-[10px] tracking-[0.25em] font-serif uppercase text-[#D4A373] font-bold block mb-1">
+              PROSES PENGUNDUHAN ARSIP
+            </span>
+            <h3 className="font-serif text-lg font-bold text-white mb-1.5">
+              Mengunduh Seluruh Kenangan
+            </h3>
+            <p className="text-xs text-[#E2D9CC]/80 font-serif italic mb-5 leading-relaxed px-2">
+              Foto biasa disimpan sebagai JPG, foto dengan ucapan suara digabung menjadi video MP4.
+            </p>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-white/10 rounded-full h-3.5 p-0.5 mb-2 overflow-hidden border border-white/10">
+              <div
+                className="bg-gradient-to-r from-[#8C6D46] via-[#D4A373] to-[#F4EFE6] h-full rounded-full transition-all duration-300"
+                style={{ width: `${batchProgress.percent}%` }}
+              />
+            </div>
+
+            {/* Progress Detail Information */}
+            <div className="w-full flex items-center justify-between text-[11px] font-mono text-[#D4A373] mb-4 px-1">
+              <span className="truncate max-w-[210px] text-left">{batchProgress.message}</span>
+              <span className="font-bold shrink-0">{batchProgress.percent}%</span>
+            </div>
+
+            {/* Cancel Button */}
+            <button
+              onClick={handleCancelBatchDownload}
+              className="px-5 py-2 rounded-full bg-white/5 hover:bg-white/10 text-xs text-[#A8A29E] hover:text-white transition-colors border border-white/10 cursor-pointer uppercase tracking-wider font-semibold"
+            >
+              Batalkan Unduhan
+            </button>
           </div>
         </div>
       )}
