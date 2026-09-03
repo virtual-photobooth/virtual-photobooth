@@ -792,8 +792,8 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
                   onClick={handleProceedToComposite}
                   className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-[#2C2A29] to-[#423E3C] hover:from-[#1A1817] hover:to-[#2C2A29] text-white font-bold text-xs tracking-widest uppercase shadow-2xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#D4A373]/40"
                 >
-                  <Sparkles className="w-4 h-4 text-[#D4A373] animate-spin" />
                   <span>Proses & Lihat Hasil Bingkai</span>
+                  <ArrowRight className="w-4 h-4 text-[#D4A373]" />
                 </button>
 
                 <button
