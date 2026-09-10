@@ -39,49 +39,19 @@ export default function EventsListPage() {
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-    const { id: eventId, name: eventName } = deleteTarget;
+    const { id: eventId } = deleteTarget;
 
     try {
       setIsDeleting(true);
 
-      // 1. Fetch photos for this event
-      const { data: photos } = await (supabase.from('photos') as any)
-        .select('photo_path')
-        .eq('event_id', eventId);
+      const res = await fetch(`/api/admin/events?id=${eventId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
 
-      // 2. Fetch voice messages for this event
-      const { data: voices } = await (supabase.from('voice_messages') as any)
-        .select('audio_path')
-        .eq('event_id', eventId);
-
-      // Fetch event frame_path & cover_path
-      const { data: eventData } = await (supabase.from('events') as any)
-        .select('frame_path, cover_path')
-        .eq('id', eventId)
-        .single();
-
-      // Collect storage file paths to remove
-      const storagePaths: string[] = [];
-      if (photos && photos.length > 0) {
-        photos.forEach((p: any) => p.photo_path && storagePaths.push(p.photo_path));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Gagal menghapus event');
       }
-      if (voices && voices.length > 0) {
-        voices.forEach((v: any) => v.audio_path && storagePaths.push(v.audio_path));
-      }
-      if (eventData?.frame_path) storagePaths.push(eventData.frame_path);
-      if (eventData?.cover_path) storagePaths.push(eventData.cover_path);
-
-      // 3. Remove files from Supabase storage
-      if (storagePaths.length > 0) {
-        await supabase.storage.from('virtual-photobooth').remove(storagePaths);
-      }
-
-      // 4. Delete database rows
-      await (supabase.from('photos') as any).delete().eq('event_id', eventId);
-      await (supabase.from('voice_messages') as any).delete().eq('event_id', eventId);
-      const { error: deleteErr } = await (supabase.from('events') as any).delete().eq('id', eventId);
-
-      if (deleteErr) throw deleteErr;
 
       setDeleteTarget(null);
       fetchEvents();

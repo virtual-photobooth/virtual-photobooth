@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { purgeEventCompletely } from '@/lib/supabase/storage-cleanup';
 
 export async function GET(request: Request) {
   try {
@@ -185,12 +186,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ success: false, message: 'Event ID is required' }, { status: 400 });
     }
 
-    const supabaseAdmin = createAdminClient();
-    const { error } = await (supabaseAdmin.from('events') as any).delete().eq('id', id);
-
-    if (error) throw error;
-    return NextResponse.json({ success: true });
+    const result = await purgeEventCompletely(id);
+    return NextResponse.json(result);
   } catch (err: any) {
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    console.error('Error deleting event:', err);
+    return NextResponse.json({ success: false, message: err.message || 'Failed to delete event' }, { status: 500 });
   }
 }
