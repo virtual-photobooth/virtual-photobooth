@@ -128,10 +128,10 @@ export async function POST(request: Request) {
           voicePath = filename;
         }
 
-        // Calculate voice retention expires_at date (default 7 days)
+        // Calculate retention expires_at date based on event_date + 7 days
         let retentionDays = 7;
         const { data: eventData } = await (supabaseAdmin.from('events') as any)
-          .select('voice_retention_days')
+          .select('event_date, voice_retention_days')
           .eq('id', eventId)
           .maybeSingle();
 
@@ -139,7 +139,16 @@ export async function POST(request: Request) {
           retentionDays = Number(eventData.voice_retention_days);
         }
 
-        const expiresAtDate = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000).toISOString();
+        let expiresAtDate: string;
+        if (eventData?.event_date) {
+          // Calculate from event_date + retentionDays at 23:59:59
+          const eventDateObj = new Date(eventData.event_date);
+          eventDateObj.setDate(eventDateObj.getDate() + retentionDays);
+          eventDateObj.setHours(23, 59, 59, 999);
+          expiresAtDate = eventDateObj.toISOString();
+        } else {
+          expiresAtDate = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000).toISOString();
+        }
 
         const { error: insertVoiceErr } = await (supabaseAdmin.from('voice_messages') as any).insert({
           event_id: eventId,

@@ -75,7 +75,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         }
       } catch (e) {}
 
-      router.push('/login');
+      router.push('/admin/login');
     }
 
     checkAuth();
@@ -89,7 +89,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       document.cookie = 'client_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     }
     await supabase.auth.signOut();
-    router.push('/login');
+    router.push('/admin/login');
   };
 
   if (checkingAuth) {

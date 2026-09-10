@@ -63,6 +63,7 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
+  const [audioError, setAudioError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Fetch Gallery Data
@@ -110,18 +111,27 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
   // Audio Handler when selected item changes or audio plays
   useEffect(() => {
     // Reset audio when modal closes or item changes
-    if (!selectedItem || !selectedItem.voiceUrl) {
-      if (audioRef.current) {
+    setAudioError(false);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setAudioDuration(0);
+
+    if (audioRef.current) {
+      try {
         audioRef.current.pause();
-        audioRef.current = null;
+      } catch {
+        // silent
       }
-      setIsPlaying(false);
-      setCurrentTime(0);
-      setAudioDuration(0);
+      audioRef.current = null;
+    }
+
+    if (!selectedItem || !selectedItem.voiceUrl) {
       return;
     }
 
-    const audio = new Audio(selectedItem.voiceUrl);
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    audio.src = selectedItem.voiceUrl;
     audioRef.current = audio;
 
     const handleLoadedMetadata = () => {
@@ -137,29 +147,51 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
       setCurrentTime(0);
     };
 
+    const handleError = () => {
+      setIsPlaying(false);
+      setAudioError(true);
+    };
+
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
 
     return () => {
-      audio.pause();
+      try {
+        audio.pause();
+      } catch {
+        // silent
+      }
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
     };
   }, [selectedItem]);
 
   const togglePlayAudio = () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || audioError) return;
 
     if (isPlaying) {
-      audioRef.current.pause();
+      try {
+        audioRef.current.pause();
+      } catch {
+        // silent
+      }
       setIsPlaying(false);
     } else {
       audioRef.current
         .play()
         .then(() => setIsPlaying(true))
-        .catch((e) => console.error('Play error:', e));
+        .catch((e: any) => {
+          setIsPlaying(false);
+          // Gracefully handle playback issues without popping Next.js dev error overlay
+          if (e?.name === 'NotSupportedError' || e?.name === 'NotAllowedError') {
+            setAudioError(true);
+          }
+          console.warn('Audio playback handled gracefully:', e?.message || e);
+        });
     }
   };
 
@@ -450,7 +482,7 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
 
             {/* Bottom Audio Player Pill Widget (Sesuai Photobooth Theme - Outside Artwork) */}
             <div className="w-full space-y-3 z-10">
-              {selectedItem.voiceUrl ? (
+              {selectedItem.voiceUrl && !audioError ? (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-2">
                     <div className="flex items-center gap-1.5 text-[#D4A373]">
@@ -504,8 +536,19 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
                   </div>
                 </div>
               ) : (
-                <div className="w-full bg-white/10 rounded-full py-2.5 px-4 text-center text-xs text-[#D4A373] font-serif italic border border-white/10">
-                  Tamu ini tidak meninggalkan pesan suara
+                <div className="w-full bg-white/[0.04] border border-[#D4A373]/25 rounded-2xl p-4 text-center space-y-1.5 backdrop-blur-xs shadow-inner">
+                  <div className="flex items-center justify-center gap-2 text-[#D4A373]">
+                    <Sparkles className="w-3.5 h-3.5 text-[#D4A373]" />
+                    <span className="text-[11px] font-serif font-bold uppercase tracking-widest text-[#E6C594]">
+                      Kenangan Foto
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#FAF7EE]/90 font-serif italic leading-relaxed px-2">
+                    Tamu ini mengabadikan senyuman manis lewat foto tanpa rekaman suara.
+                  </p>
+                  <span className="text-[10px] text-white/40 tracking-wider block">
+                    Setiap momen tetap tersimpan abadi dan bermakna ✨
+                  </span>
                 </div>
               )}
 
@@ -531,7 +574,7 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
               )}
 
               {/* Download Action Buttons */}
-              {selectedItem.voiceUrl ? (
+              {selectedItem.voiceUrl && !audioError ? (
                 <div className="w-full space-y-2 pt-1">
                   {/* Primary: Download Video MP4 + Voice Note */}
                   <button

@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { Lock, Mail, ArrowRight, AlertCircle, Loader2, User, Shield } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
 
-export default function LoginPage() {
-  const [activeTab, setActiveTab] = useState<'client' | 'owner'>('client');
+export default function VendorLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,7 +15,7 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleVendorLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
@@ -25,37 +25,6 @@ export default function LoginPage() {
     const inputPassword = password.trim();
 
     try {
-      if (activeTab === 'owner') {
-        // Set client-side cookies and localStorage immediately
-        document.cookie = `owner_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
-        document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('owner_session', normalizedEmail);
-          localStorage.setItem('client_session', normalizedEmail);
-        }
-
-        // Try Supabase Auth
-        try {
-          await supabase.auth.signInWithPassword({
-            email: normalizedEmail,
-            password: inputPassword,
-          });
-        } catch (e) {}
-
-        // Call server-side API endpoint to set HTTP response cookies
-        try {
-          await fetch('/api/auth/owner-login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: normalizedEmail, password: inputPassword }),
-          });
-        } catch (e) {}
-
-        window.location.href = '/admin';
-        return;
-      }
-
-      // === CLIENT HOST LOGIN FLOW ===
       // 1. Try server-side Client Login API against `clients` database table
       const res = await fetch('/api/auth/client-login', {
         method: 'POST',
@@ -67,14 +36,17 @@ export default function LoginPage() {
 
       if (res.ok && resData.success) {
         if (typeof window !== 'undefined') {
-          localStorage.setItem('client_session', JSON.stringify({ email: normalizedEmail, loggedInAt: Date.now() }));
+          localStorage.setItem(
+            'client_session',
+            JSON.stringify({ email: normalizedEmail, loggedInAt: Date.now() })
+          );
           document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
         }
         window.location.href = resData.redirect || '/client';
         return;
       }
 
-      // 2. Fallback: Check Supabase Auth if client user was registered in Auth
+      // 2. Fallback: Check Supabase Auth if client user was registered directly in Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password: inputPassword,
@@ -82,113 +54,107 @@ export default function LoginPage() {
 
       if (!authError && authData?.user) {
         if (typeof window !== 'undefined') {
-          localStorage.setItem('client_session', JSON.stringify({ email: normalizedEmail, loggedInAt: Date.now() }));
+          localStorage.setItem(
+            'client_session',
+            JSON.stringify({ email: normalizedEmail, loggedInAt: Date.now() })
+          );
           document.cookie = `client_session=${encodeURIComponent(normalizedEmail)}; path=/; max-age=86400; SameSite=Lax`;
         }
         window.location.href = '/client';
         return;
       }
 
-      setError(resData.message || 'Akun Client tidak terdaftar atau Password salah. Silakan minta akses resmi dari Admin.');
+      setError(
+        resData.message ||
+          'Akun Vendor / Klien tidak terdaftar atau Password salah. Silakan periksa kembali email & password dari Admin.'
+      );
     } catch (err: any) {
-      console.error('Login error:', err);
-      setError('Gagal memproses login. Silakan periksa koneksi atau data login Anda.');
+      console.error('Vendor login error:', err);
+      setError('Gagal memproses login. Silakan periksa koneksi internet Anda dan coba lagi.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F9F6F0] text-[#2C2A29] flex items-center justify-center p-4 relative font-sans selection:bg-[#B8926A] selection:text-white">
-      <div className="w-full max-w-md relative z-10">
-        {/* Logo & Subtitle */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-full bg-[#E2D9CC] border border-[#D4A373]/40 flex items-center justify-center mx-auto mb-4 font-serif italic text-2xl font-bold text-[#8C6D46] shadow-sm">
-            VP
-          </div>
-          <h1 className="font-serif text-3xl font-bold text-[#2C2A29] tracking-tight">
-            Virtual Photobooth
-          </h1>
-          <p className="text-xs text-[#78716C] mt-1 font-serif italic">
-            {activeTab === 'client' ? 'Masuk ke Portal Pengelola Acara (Client)' : 'Masuk ke Dashboard Owner / Super Admin'}
-          </p>
-        </div>
+    <div className="min-h-screen bg-[#FAF9F5] text-[#111111] flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans selection:bg-[#A27A49] selection:text-white">
+      {/* Top Navbar Brand Link */}
+      <header className="w-full max-w-md mx-auto pt-2 sm:pt-4 flex items-center justify-between">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-[#666666] hover:text-[#111111] transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Kembali ke Beranda</span>
+        </Link>
+      </header>
 
-        {/* Card Form */}
-        <div className="bg-[#F4EFE6] border border-[#E2D9CC] rounded-3xl p-6 sm:p-8 shadow-xl">
-          {/* Tab Selector */}
-          <div className="flex bg-[#E8E2D8] p-1.5 rounded-2xl mb-6 border border-[#DCD5C9]">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('client');
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                activeTab === 'client'
-                  ? 'bg-white text-[#2C2A29] shadow-sm font-bold'
-                  : 'text-[#78716C] hover:text-[#2C2A29]'
-              }`}
-            >
-              <User className="w-4 h-4 text-[#8C6D46]" />
-              <span>Portal Klien</span>
-            </button>
+      {/* Main Login Card Container */}
+      <main className="w-full max-w-md mx-auto my-auto py-6 sm:py-8">
+        <div className="bg-white border border-[#E5E1DA] rounded-[2rem] p-7 sm:p-9 shadow-sm relative overflow-hidden">
+          {/* Brand Logo & Header */}
+          <div className="text-center mb-7 space-y-3">
+            <Link href="/" className="inline-block transition-transform hover:scale-102">
+              <img
+                src="/brand/logo.png"
+                alt="sebuah.kenang"
+                className="h-10 sm:h-11 w-auto mx-auto object-contain"
+              />
+            </Link>
 
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('owner');
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                activeTab === 'owner'
-                  ? 'bg-[#2C2A29] text-white shadow-sm font-bold'
-                  : 'text-[#78716C] hover:text-[#2C2A29]'
-              }`}
-            >
-              <Shield className="w-4 h-4 text-[#B8926A]" />
-              <span>Owner / Admin</span>
-            </button>
+            <div className="pt-2">
+              <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-[#A27A49] font-medium block">
+                PORTAL PENGELOLA ACARA & VENDOR
+              </span>
+              <h1 className="font-serif text-2xl sm:text-3xl font-light text-[#111111] tracking-tight mt-1">
+                Masuk ke Portal Anda
+              </h1>
+              <p className="text-xs text-[#666666] font-light mt-1.5 leading-relaxed px-2">
+                Pantau foto tamu secara langsung, dengarkan pesan suara, dan unduh seluruh arsip acara.
+              </p>
+            </div>
           </div>
 
+          {/* Error Alert Box */}
           {error && (
-            <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-700 text-xs font-semibold flex items-start gap-3">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{error}</span>
+            <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200/80 text-rose-800 text-xs font-medium flex items-start gap-3 animate-in fade-in duration-200">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+              <span className="leading-relaxed">{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          {/* Form Login Vendor */}
+          <form onSubmit={handleVendorLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-2">
-                {activeTab === 'client' ? 'Alamat Email Client' : 'Email Owner / Admin'}
+              <label className="block text-[11px] font-mono uppercase tracking-wider text-[#666666] mb-2 font-medium">
+                Alamat Email Vendor / Klien
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8A29E]" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#999999]" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={activeTab === 'client' ? 'email-client@domain.com' : 'admin@photobooth.com'}
-                  className="w-full bg-[#F0EBE1] border border-[#E2D9CC] focus:border-[#8C6D46] rounded-2xl py-3.5 pl-11 pr-4 text-sm text-[#2C2A29] placeholder-[#A8A29E] focus:outline-none transition-all"
+                  placeholder="email-klien@domain.com"
+                  className="w-full bg-[#FAF9F5] border border-[#E5E1DA] focus:border-[#111111] focus:bg-white rounded-2xl py-3.5 pl-11 pr-4 text-sm text-[#111111] placeholder-[#999999] focus:outline-none transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-2">
+              <label className="block text-[11px] font-mono uppercase tracking-wider text-[#666666] mb-2 font-medium">
                 Kata Sandi (Password)
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8A29E]" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#999999]" />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-[#F0EBE1] border border-[#E2D9CC] focus:border-[#8C6D46] rounded-2xl py-3.5 pl-11 pr-4 text-sm text-[#2C2A29] placeholder-[#A8A29E] focus:outline-none transition-all"
+                  className="w-full bg-[#FAF9F5] border border-[#E5E1DA] focus:border-[#111111] focus:bg-white rounded-2xl py-3.5 pl-11 pr-4 text-sm text-[#111111] placeholder-[#999999] focus:outline-none transition-all"
                 />
               </div>
             </div>
@@ -196,31 +162,37 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full mt-2 font-medium py-4 px-6 rounded-full shadow-lg flex items-center justify-center gap-2 text-xs tracking-wider uppercase transition-all disabled:opacity-50 cursor-pointer ${
-                activeTab === 'client'
-                  ? 'bg-[#8C6D46] hover:bg-[#735735] text-white'
-                  : 'bg-[#2C2A29] hover:bg-[#1A1817] text-white'
-              }`}
+              className="w-full mt-3 py-3.5 px-6 rounded-full bg-[#111111] hover:bg-[#292624] text-white text-xs font-mono uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer active:scale-98 disabled:opacity-50"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Memeriksa Akun...</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Memeriksa Akses...</span>
                 </>
               ) : (
                 <>
-                  <span>{activeTab === 'client' ? 'Masuk ke Portal Klien' : 'Masuk ke Dashboard Owner'}</span>
+                  <span>Masuk ke Portal Klien</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
-        </div>
 
-        <p className="text-center text-xs text-[#78716C] mt-8 font-serif italic">
-          Virtual Photobooth &copy; 2026. Abadikan Momen Spesial Anda.
+          {/* Discreet Help Note */}
+          <div className="mt-6 pt-5 border-t border-[#F0EBE1] text-center">
+            <p className="text-[11px] text-[#888888] font-light leading-relaxed">
+              Belum memiliki akun atau lupa password? Hubungi tim administrator / organizer acara Anda untuk mendapatkan kredensial resmi.
+            </p>
+          </div>
+        </div>
+      </main>
+
+      {/* Brand Footer */}
+      <footer className="w-full max-w-md mx-auto pb-4 text-center">
+        <p className="text-[11px] font-mono text-[#888888]">
+          <span className="font-serif italic font-normal text-[#111111]">sebuah.kenang</span> &bull; Virtual Photobooth for Moments Worth Remembering.
         </p>
-      </div>
+      </footer>
     </div>
   );
 }

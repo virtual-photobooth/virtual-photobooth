@@ -32,6 +32,8 @@ export interface Event {
   status: EventStatus;
   frame_path: string | null;
   cover_path?: string | null;
+  coverUrl?: string | null;
+  frameUrl?: string | null;
   photo_count: number;
   countdown_seconds: number;
   is_voice_enabled: boolean;

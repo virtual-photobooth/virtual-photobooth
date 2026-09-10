@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,28 +12,34 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const newsreader = Newsreader({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+});
+
 export const metadata: Metadata = {
-  title: "Virtual Photobooth — Modern, Minimal & Memorable",
-  description: "Abadikan kenangan foto acara spesial Anda dengan bingkai eksklusif & pesan suara ucapan.",
+  title: "sebuah.kenang — Virtual Photobooth for Moments Worth Remembering",
+  description: "Virtual photobooth untuk momen yang layak dikenang. Simpan foto, GIF, dan pesan suara dari setiap tamu acara dalam satu tempat.",
   metadataBase: new URL("https://virtual-photobooth-taupe.vercel.app"),
   icons: {
     icon: [
-      { url: "/icon.png", type: "image/jpeg" },
+      { url: "/icon.png", type: "image/png" },
     ],
     shortcut: "/icon.png",
     apple: "/apple-icon.png",
   },
   openGraph: {
-    title: "Virtual Photobooth — Modern, Minimal & Memorable",
-    description: "Abadikan kenangan foto acara spesial Anda dengan bingkai eksklusif & pesan suara ucapan.",
+    title: "sebuah.kenang — Virtual Photobooth for Moments Worth Remembering",
+    description: "Virtual photobooth untuk momen yang layak dikenang. Simpan foto, GIF, dan pesan suara dari setiap tamu acara dalam satu tempat.",
     url: "https://virtual-photobooth-taupe.vercel.app",
-    siteName: "Virtual Photobooth",
+    siteName: "sebuah.kenang",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Virtual Photobooth Official Logo",
+        alt: "sebuah.kenang Official Logo",
       },
     ],
     locale: "id_ID",
@@ -41,8 +47,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Virtual Photobooth — Modern, Minimal & Memorable",
-    description: "Abadikan kenangan foto acara spesial Anda dengan bingkai eksklusif & pesan suara ucapan.",
+    title: "sebuah.kenang — Virtual Photobooth for Moments Worth Remembering",
+    description: "Virtual photobooth untuk momen yang layak dikenang. Simpan foto, GIF, dan pesan suara dari setiap tamu acara dalam satu tempat.",
     images: ["/og-image.png"],
   },
 };
@@ -51,7 +57,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

@@ -148,7 +148,7 @@ export async function GET(request: Request) {
 
       const voiceMsg = photo.guest_id
         ? voiceMapByGuestId.get(photo.guest_id)
-        : voiceListWithoutGuest[index] || null;
+        : null;
 
       if (voiceMsg && voiceMsg.audio_path) {
         if (voiceMsg.audio_path.startsWith('http://') || voiceMsg.audio_path.startsWith('https://')) {
