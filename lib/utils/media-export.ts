@@ -34,8 +34,8 @@ export async function downloadImageDirectly(url: string, filename: string) {
 
 /**
  * Merges a photo strip image and voice note audio into an MP4/WebM video.
- * Silently renders audio (no speaker blast), animates a subtle audio waveform pill on the canvas,
- * and records into a video Blob.
+ * Silently renders audio alongside the pristine photostrip image without any visual
+ * overlays or pills on top of vendor artwork, and records into a video Blob.
  */
 export async function exportPhotoWithAudioToVideo(
   photoUrl: string,
@@ -88,11 +88,7 @@ export async function exportPhotoWithAudioToVideo(
   const dest = audioCtx.createMediaStreamDestination();
   const source = audioCtx.createBufferSource();
   source.buffer = audioBuffer;
-
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 64;
-  source.connect(analyser);
-  analyser.connect(dest);
+  source.connect(dest);
   // Crucial: source is NOT connected to audioCtx.destination, so nothing plays out of the speaker!
 
   // 5. Setup MediaRecorder
@@ -132,7 +128,6 @@ export async function exportPhotoWithAudioToVideo(
   return new Promise<{ blob: Blob; ext: string }>((resolve, reject) => {
     let animId: number;
     let startTime = 0;
-    const frequencyData = new Uint8Array(analyser.frequencyBinCount);
 
     const cleanup = () => {
       if (animId) cancelAnimationFrame(animId);
@@ -140,7 +135,6 @@ export async function exportPhotoWithAudioToVideo(
         source.stop();
       } catch (_) {}
       source.disconnect();
-      analyser.disconnect();
       audioCtx.close().catch(() => {});
     };
 
@@ -162,73 +156,9 @@ export async function exportPhotoWithAudioToVideo(
 
       onProgress?.(Math.round(progressRatio * 100));
 
-      // Draw pristine photostrip image
+      // Draw pristine photostrip image - vendor artwork is 100% untouched
       ctx.clearRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
-
-      // Draw elegant subtle animated waveform pill at bottom of photostrip
-      analyser.getByteFrequencyData(frequencyData);
-
-      const scale = width / 1080;
-      const pillWidth = 420 * scale;
-      const pillHeight = 64 * scale;
-      const pillX = (width - pillWidth) / 2;
-      const pillY = height - (100 * scale) - pillHeight;
-      const radius = pillHeight / 2;
-
-      // Dark glassmorphism pill background
-      ctx.save();
-      ctx.fillStyle = 'rgba(28, 25, 23, 0.82)';
-      ctx.beginPath();
-      ctx.roundRect(pillX, pillY, pillWidth, pillHeight, radius);
-      ctx.fill();
-
-      // Border outline
-      ctx.strokeStyle = 'rgba(212, 163, 115, 0.4)';
-      ctx.lineWidth = 2 * scale;
-      ctx.stroke();
-
-      // Audio waveform bars inside pill
-      const barCount = 14;
-      const barSpacing = 4 * scale;
-      const barWidth = 3 * scale;
-      const totalWaveWidth = (barCount * barWidth) + ((barCount - 1) * barSpacing);
-      const startWaveX = pillX + (36 * scale);
-      const centerY = pillY + (pillHeight / 2);
-
-      for (let b = 0; b < barCount; b++) {
-        const val = frequencyData[b % frequencyData.length] / 255;
-        // Natural pulsing wave height
-        const minHeight = 6 * scale;
-        const maxHeight = (pillHeight - 20 * scale);
-        const barH = minHeight + (val * (maxHeight - minHeight));
-        const bx = startWaveX + (b * (barWidth + barSpacing));
-
-        ctx.fillStyle = '#D4A373';
-        ctx.beginPath();
-        ctx.roundRect(bx, centerY - (barH / 2), barWidth, barH, barWidth / 2);
-        ctx.fill();
-      }
-
-      // Audio label & timer text
-      ctx.font = `bold ${Math.round(18 * scale)}px sans-serif`;
-      ctx.fillStyle = '#FFFFFF';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Voice Note', startWaveX + totalWaveWidth + (20 * scale), centerY);
-
-      // Timer display: mm:ss
-      const currentSec = Math.floor(elapsed);
-      const currentMins = Math.floor(currentSec / 60);
-      const currentRemSec = currentSec % 60;
-      const timerStr = `${String(currentMins).padStart(2, '0')}:${String(currentRemSec).padStart(2, '0')}`;
-      
-      ctx.font = `${Math.round(16 * scale)}px monospace`;
-      ctx.fillStyle = '#D4A373';
-      ctx.textAlign = 'right';
-      ctx.fillText(timerStr, pillX + pillWidth - (28 * scale), centerY);
-
-      ctx.restore();
 
       if (elapsed < duration + 0.3) {
         animId = requestAnimationFrame(renderFrame);
