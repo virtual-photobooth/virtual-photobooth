@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { uploadToStorage } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,15 +71,9 @@ export async function POST(request: Request) {
         const buffer = Buffer.from(base64Data, 'base64');
         const filename = `events/${eventId}/photos/photo_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
-        const { error: uploadPhotoErr } = await supabaseAdmin.storage
-          .from('virtual-photobooth')
-          .upload(filename, buffer, { contentType: 'image/jpeg', upsert: true });
-
-        if (!uploadPhotoErr) {
+        const uploadRes = await uploadToStorage(filename, buffer, 'image/jpeg');
+        if (uploadRes.success) {
           photoPath = filename;
-        } else {
-          console.error('Upload photo storage error:', uploadPhotoErr);
-          photoErrorMsg = `Storage upload error: ${uploadPhotoErr.message}`;
         }
 
         const { error: insertPhotoErr } = await (supabaseAdmin.from('photos') as any).insert({
@@ -117,14 +112,8 @@ export async function POST(request: Request) {
         const ext = isMp4 ? 'm4a' : 'webm';
         const filename = `events/${eventId}/voices/voice_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
 
-        const { error: uploadVoiceErr } = await supabaseAdmin.storage
-          .from('virtual-photobooth')
-          .upload(filename, audioBuffer, { contentType: cleanMime, upsert: true });
-
-        if (uploadVoiceErr) {
-          console.error('Upload voice storage error:', uploadVoiceErr.message);
-          voiceErrorMsg = `Storage upload error: ${uploadVoiceErr.message}`;
-        } else {
+        const uploadVoiceRes = await uploadToStorage(filename, audioBuffer, cleanMime);
+        if (uploadVoiceRes.success) {
           voicePath = filename;
         }
 

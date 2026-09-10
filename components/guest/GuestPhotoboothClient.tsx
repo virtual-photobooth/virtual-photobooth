@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Event } from '@/lib/types/database';
 import { createFinalPhotoComposite } from '@/lib/utils/canvas';
 import { generateSlug } from '@/lib/utils/slug';
+import { getStoragePublicUrl } from '@/lib/storage/url';
 import {
   Camera,
   RotateCcw,
@@ -156,32 +157,23 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
         setEvent(mergedEvent as Event);
 
         if (data.frame_path) {
-          const { data: publicUrlData } = supabase.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(data.frame_path);
-
-          if (publicUrlData?.publicUrl) {
-            setFramePublicUrl(`${publicUrlData.publicUrl}?t=${Date.now()}`);
+          const publicUrl = getStoragePublicUrl(data.frame_path);
+          if (publicUrl) {
+            setFramePublicUrl(`${publicUrl}?t=${Date.now()}`);
           }
         }
 
         if (data.cover_path) {
-          const { data: coverUrlData } = supabase.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(data.cover_path);
-
-          if (coverUrlData?.publicUrl) {
-            setCoverPublicUrl(`${coverUrlData.publicUrl}?t=${Date.now()}`);
+          const coverUrl = getStoragePublicUrl(data.cover_path);
+          if (coverUrl) {
+            setCoverPublicUrl(`${coverUrl}?t=${Date.now()}`);
           }
         } else {
           // Fallback check: if cover photo exists under default storage path for event
           const defaultCoverPath = `events/${data.id}/cover/cover.jpg`;
-          const { data: coverUrlData } = supabase.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(defaultCoverPath);
-
-          if (coverUrlData?.publicUrl) {
-            setCoverPublicUrl(`${coverUrlData.publicUrl}?t=${Date.now()}`);
+          const coverUrl = getStoragePublicUrl(defaultCoverPath);
+          if (coverUrl) {
+            setCoverPublicUrl(`${coverUrl}?t=${Date.now()}`);
           }
         }
       } catch (err: any) {

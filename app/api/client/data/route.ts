@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { cookies } from 'next/headers';
+import { getStoragePublicUrl } from '@/lib/storage';
 import {
   purgePhotoCompletely,
   purgeGuestCompletely,
@@ -115,8 +116,8 @@ export async function GET(request: Request) {
     const voiceByNameMap = new Map<string, any>();
 
     const resolvedVoices = (voicesData || []).map((v: any) => {
-      const { data: urlData } = supabaseAdmin.storage.from('virtual-photobooth').getPublicUrl(v.audio_path);
-      const enrichedVoice = { ...v, publicUrl: urlData?.publicUrl || '' };
+      const publicUrl = getStoragePublicUrl(v.audio_path);
+      const enrichedVoice = { ...v, publicUrl };
       if (v.guest_id) {
         voiceMap.set(v.guest_id, enrichedVoice);
       }
@@ -127,13 +128,13 @@ export async function GET(request: Request) {
     });
 
     const resolvedPhotos = (photosData || []).map((p: any) => {
-      const { data: urlData } = supabaseAdmin.storage.from('virtual-photobooth').getPublicUrl(p.final_photo_path);
+      const publicUrl = getStoragePublicUrl(p.final_photo_path);
       const guestNameKey = (p.guest?.name || p.guest_name || '').trim().toLowerCase();
       const matchingVoice = (p.guest_id ? voiceMap.get(p.guest_id) : null) || (guestNameKey ? voiceByNameMap.get(guestNameKey) : null);
 
       return {
         ...p,
-        publicUrl: urlData?.publicUrl || '',
+        publicUrl,
         voiceUrl: matchingVoice?.publicUrl || null,
         voiceDuration: matchingVoice?.duration_seconds || null,
         voiceId: matchingVoice?.id || null,
@@ -144,12 +145,10 @@ export async function GET(request: Request) {
       let coverUrl = null;
       let frameUrl = null;
       if (e.cover_path) {
-        const { data: cData } = supabaseAdmin.storage.from('virtual-photobooth').getPublicUrl(e.cover_path);
-        coverUrl = cData?.publicUrl || null;
+        coverUrl = getStoragePublicUrl(e.cover_path);
       }
       if (e.frame_path) {
-        const { data: fData } = supabaseAdmin.storage.from('virtual-photobooth').getPublicUrl(e.frame_path);
-        frameUrl = fData?.publicUrl || null;
+        frameUrl = getStoragePublicUrl(e.frame_path);
       }
       return { ...e, coverUrl, frameUrl };
     });

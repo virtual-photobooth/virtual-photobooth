@@ -4,6 +4,7 @@ import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Event } from '@/lib/types/database';
+import { getStoragePublicUrl } from '@/lib/storage/url';
 import {
   ArrowLeft,
   QrCode,
@@ -134,12 +135,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         setEventUrl(fullUrl);
 
         if (data.frame_path) {
-          const { data: publicUrlData } = supabase.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(data.frame_path);
-
-          if (publicUrlData?.publicUrl) {
-            setFrameUrl(publicUrlData.publicUrl);
+          const publicUrl = getStoragePublicUrl(data.frame_path);
+          if (publicUrl) {
+            setFrameUrl(publicUrl);
           }
         }
       } catch (err) {

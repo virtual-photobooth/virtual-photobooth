@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateSlug } from '@/lib/utils/slug';
+import { getStoragePublicUrl } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -71,10 +72,7 @@ export async function GET(request: Request) {
     // Resolve cover URL
     let coverPublicUrl: string | null = null;
     if (event.cover_path) {
-      const { data: coverUrlData } = supabaseAdmin.storage
-        .from('virtual-photobooth')
-        .getPublicUrl(event.cover_path);
-      coverPublicUrl = coverUrlData?.publicUrl || null;
+      coverPublicUrl = getStoragePublicUrl(event.cover_path);
     }
 
     // 2. Fetch Photos for this Event
@@ -128,18 +126,7 @@ export async function GET(request: Request) {
 
     // 4. Map Photos to Gallery Items with Storage Public URLs
     const galleryItemsFromPhotos = (photos || []).map((photo: any, index: number) => {
-      let photoUrl = '';
-      if (photo.final_photo_path) {
-        if (photo.final_photo_path.startsWith('http://') || photo.final_photo_path.startsWith('https://')) {
-          photoUrl = photo.final_photo_path;
-        } else {
-          const { data: pUrlData } = supabaseAdmin.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(photo.final_photo_path);
-          photoUrl = pUrlData?.publicUrl || '';
-        }
-      }
-
+      const photoUrl = photo.final_photo_path ? getStoragePublicUrl(photo.final_photo_path) : '';
       const guestName = (photo.guest_id ? guestMap.get(photo.guest_id) : null) || photo.guests?.name || 'Tamu Istimewa';
 
       // Find matching voice message by guest_id or fallback
@@ -151,14 +138,7 @@ export async function GET(request: Request) {
         : null;
 
       if (voiceMsg && voiceMsg.audio_path) {
-        if (voiceMsg.audio_path.startsWith('http://') || voiceMsg.audio_path.startsWith('https://')) {
-          voiceUrl = voiceMsg.audio_path;
-        } else {
-          const { data: vUrlData } = supabaseAdmin.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(voiceMsg.audio_path);
-          voiceUrl = vUrlData?.publicUrl || null;
-        }
+        voiceUrl = getStoragePublicUrl(voiceMsg.audio_path);
         durationSeconds = voiceMsg.duration_seconds || 5;
       }
 
@@ -182,14 +162,7 @@ export async function GET(request: Request) {
     const standaloneItems = standaloneVoices.map((v: any) => {
       let voiceUrl: string | null = null;
       if (v.audio_path) {
-        if (v.audio_path.startsWith('http://') || v.audio_path.startsWith('https://')) {
-          voiceUrl = v.audio_path;
-        } else {
-          const { data: vUrlData } = supabaseAdmin.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(v.audio_path);
-          voiceUrl = vUrlData?.publicUrl || null;
-        }
+        voiceUrl = getStoragePublicUrl(v.audio_path);
       }
 
       const guestName = (v.guest_id ? guestMap.get(v.guest_id) : null) || 'Tamu Spesial';

@@ -112,26 +112,45 @@ export default function StoragePage() {
 
       {/* Storage Breakdown Details */}
       <div className="bg-white border border-slate-200/80 rounded-3xl p-8 shadow-xs space-y-6">
-        <h2 className="text-base font-bold text-[#1A2621]">Supabase Storage Policy</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-bold text-[#1A2621]">Storage Provider: Cloudflare R2 (S3)</h2>
+            <p className="text-xs text-slate-500 mt-0.5">High-performance S3-compatible cloud object storage with $0 egress bandwidth</p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 self-start sm:self-auto">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Cloudflare R2 Ready
+          </span>
+        </div>
 
         <div className="space-y-3 text-xs text-slate-600">
           <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <div>
-              <p className="font-bold text-slate-800">Final Composite PNG Photos</p>
-              <p className="text-slate-400 text-[11px]">Resolution: 2160×3240 px (approx. 1.5MB each)</p>
+              <p className="font-bold text-slate-800">Final Composite Photos (JPEG / PNG)</p>
+              <p className="text-slate-400 text-[11px]">Direct CDN delivery via Cloudflare Edge network • Zero egress bandwidth cost</p>
             </div>
-            <span className="font-semibold text-amber-800 bg-amber-100 px-3 py-1 rounded-full">
-              7-Day Expiration Policy
+            <span className="font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+              $0 Egress Bandwidth
             </span>
           </div>
 
           <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <div>
-              <p className="font-bold text-slate-800">Voice Guestbook Audio Files</p>
-              <p className="text-slate-400 text-[11px]">Format: WEBM Opus Audio (approx. 400KB each)</p>
+              <p className="font-bold text-slate-800">Voice Guestbook Audio (WEBM / M4A)</p>
+              <p className="text-slate-400 text-[11px]">Instant audio streaming with global edge caching</p>
             </div>
             <span className="font-semibold text-amber-800 bg-amber-100 px-3 py-1 rounded-full">
-              7-Day Expiration Policy
+              7-Day Retention Auto-Purge
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <div>
+              <p className="font-bold text-slate-800">Free Tier Allowance</p>
+              <p className="text-slate-400 text-[11px]">Cloudflare R2 provides 10 GB standard storage free every month</p>
+            </div>
+            <span className="font-semibold text-slate-800 bg-slate-200 px-3 py-1 rounded-full">
+              10 GB Free / Bulan
             </span>
           </div>
         </div>

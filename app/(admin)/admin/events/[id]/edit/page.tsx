@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Event, Client, EventStatus } from '@/lib/types/database';
 import { validateFrameFile } from '@/lib/utils/frame-validator';
+import { getStoragePublicUrl } from '@/lib/storage/url';
 import {
   ArrowLeft,
   Upload,
@@ -100,32 +101,23 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         });
 
         if (eventData.frame_path) {
-          const { data: publicUrlData } = supabase.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(eventData.frame_path);
-
-          if (publicUrlData?.publicUrl) {
-            setFramePreviewUrl(publicUrlData.publicUrl);
+          const publicUrl = getStoragePublicUrl(eventData.frame_path);
+          if (publicUrl) {
+            setFramePreviewUrl(publicUrl);
           }
         }
 
         if (eventData.cover_path) {
-          const { data: coverUrlData } = supabase.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(eventData.cover_path);
-
-          if (coverUrlData?.publicUrl) {
-            setCoverPreviewUrl(`${coverUrlData.publicUrl}?t=${Date.now()}`);
+          const coverUrl = getStoragePublicUrl(eventData.cover_path);
+          if (coverUrl) {
+            setCoverPreviewUrl(`${coverUrl}?t=${Date.now()}`);
           }
         } else {
           // Fallback: check if cover image exists under event storage path
           const defaultCoverPath = `events/${eventId}/cover/cover.jpg`;
-          const { data: coverUrlData } = supabase.storage
-            .from('virtual-photobooth')
-            .getPublicUrl(defaultCoverPath);
-
-          if (coverUrlData?.publicUrl) {
-            setCoverPreviewUrl(`${coverUrlData.publicUrl}?t=${Date.now()}`);
+          const coverUrl = getStoragePublicUrl(defaultCoverPath);
+          if (coverUrl) {
+            setCoverPreviewUrl(`${coverUrl}?t=${Date.now()}`);
           }
         }
       } catch (err: any) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { deleteMultipleFromStorage } from '@/lib/storage';
 
 /**
  * Retention Cleanup Cron Endpoint
@@ -71,7 +72,7 @@ async function handleCleanup(request: Request) {
       if (expiredPhotos && expiredPhotos.length > 0) {
         const photoPathsToDelete = expiredPhotos.map((p: any) => p.final_photo_path).filter(Boolean);
         if (photoPathsToDelete.length > 0) {
-          await supabaseAdmin.storage.from('virtual-photobooth').remove(photoPathsToDelete);
+          await deleteMultipleFromStorage(photoPathsToDelete);
         }
         await (supabaseAdmin.from('photos') as any).delete().in('event_id', expiredEventIds);
         cleanedPhotoCount += expiredPhotos.length;
@@ -85,7 +86,7 @@ async function handleCleanup(request: Request) {
       if (expiredVoices && expiredVoices.length > 0) {
         const voicePathsToDelete = expiredVoices.map((v: any) => v.audio_path).filter(Boolean);
         if (voicePathsToDelete.length > 0) {
-          await supabaseAdmin.storage.from('virtual-photobooth').remove(voicePathsToDelete);
+          await deleteMultipleFromStorage(voicePathsToDelete);
         }
         await (supabaseAdmin.from('voice_messages') as any).delete().in('event_id', expiredEventIds);
         cleanedVoiceCount += expiredVoices.length;
@@ -116,7 +117,7 @@ async function handleCleanup(request: Request) {
       const voiceIds = orphanExpiredVoices.map((v: any) => v.id);
 
       if (audioPaths.length > 0) {
-        await supabaseAdmin.storage.from('virtual-photobooth').remove(audioPaths);
+        await deleteMultipleFromStorage(audioPaths);
       }
       await (supabaseAdmin.from('voice_messages') as any).delete().in('id', voiceIds);
       cleanedVoiceCount += voiceIds.length;

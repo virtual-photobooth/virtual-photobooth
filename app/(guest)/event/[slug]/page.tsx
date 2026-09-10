@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/client';
 import { generateSlug } from '@/lib/utils/slug';
+import { getStoragePublicUrl } from '@/lib/storage/url';
 import GuestPhotoboothClient from '@/components/guest/GuestPhotoboothClient';
 
 export async function generateMetadata({
@@ -45,11 +46,12 @@ export async function generateMetadata({
   // Cover photo URL or fallback OG Banner image
   let coverUrl = 'https://virtual-photobooth-taupe.vercel.app/og-image.png';
   if (event.cover_path) {
-    const { data: coverData } = supabase.storage
-      .from('virtual-photobooth')
-      .getPublicUrl(event.cover_path);
-    if (coverData?.publicUrl) {
-      coverUrl = `${coverData.publicUrl}?t=${Date.now()}`;
+    const publicUrl = getStoragePublicUrl(event.cover_path);
+    if (publicUrl) {
+      const resolvedCover = publicUrl.startsWith('http')
+        ? publicUrl
+        : `https://virtual-photobooth-taupe.vercel.app${publicUrl}`;
+      coverUrl = `${resolvedCover}?t=${Date.now()}`;
     }
   }
 

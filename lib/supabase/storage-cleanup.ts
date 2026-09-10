@@ -1,59 +1,24 @@
 import { createAdminClient } from './admin';
+import {
+  cleanStoragePath,
+  deleteFromStorage,
+  deleteMultipleFromStorage,
+  listStorageFiles,
+  getStorageBucketName,
+} from '@/lib/storage';
+
+export { cleanStoragePath };
 
 /**
- * Cleans a file path by removing full URLs, leading slashes, and redundant bucket prefixes.
- */
-export function cleanStoragePath(pathOrUrl: string, bucket = 'virtual-photobooth'): string {
-  if (!pathOrUrl) return '';
-  let p = pathOrUrl.trim();
-  if (p.startsWith('http://') || p.startsWith('https://')) {
-    try {
-      const url = new URL(p);
-      p = url.pathname;
-    } catch {
-      // ignore
-    }
-  }
-  const bucketPrefix = `/storage/v1/object/public/${bucket}/`;
-  if (p.includes(bucketPrefix)) {
-    p = p.substring(p.indexOf(bucketPrefix) + bucketPrefix.length);
-  }
-  if (p.startsWith(`${bucket}/`)) {
-    p = p.substring(bucket.length + 1);
-  }
-  if (p.startsWith('/')) {
-    p = p.substring(1);
-  }
-  return p;
-}
-
-/**
- * Recursively lists all file paths under a prefix in a given Supabase Storage bucket.
+ * Recursively lists all file paths under a prefix in the configured storage.
  */
 export async function listAllFilesRecursively(bucket: string, prefix: string): Promise<string[]> {
-  const supabaseAdmin = createAdminClient();
-  let results: string[] = [];
-
-  const { data, error } = await supabaseAdmin.storage.from(bucket).list(prefix);
-  if (error || !data) return results;
-
-  for (const item of data) {
-    const fullPath = prefix ? `${prefix}/${item.name}` : item.name;
-    // In Supabase storage, folders have item.id === null
-    if (item.id === null) {
-      const sub = await listAllFilesRecursively(bucket, fullPath);
-      results = results.concat(sub);
-    } else {
-      results.push(fullPath);
-    }
-  }
-
-  return results;
+  return listStorageFiles(prefix, bucket);
 }
 
 /**
  * Completely purges a photo and all its associated guest data & voice message.
- * - Deletes the photo file from storage
+ * - Deletes the photo file from storage (Cloudflare R2 / Supabase)
  * - If linked to a guest:
  *   - Deletes any other photos for this guest from storage and database
  *   - Deletes voice messages for this guest from storage and database
@@ -62,7 +27,7 @@ export async function listAllFilesRecursively(bucket: string, prefix: string): P
  */
 export async function purgePhotoCompletely(photoIdOrPath: string) {
   const supabaseAdmin = createAdminClient();
-  const bucket = 'virtual-photobooth';
+  const bucket = getStorageBucketName();
   const pathsToDelete = new Set<string>();
 
   // 1. Look up photo record by ID or final_photo_path
@@ -87,7 +52,7 @@ export async function purgePhotoCompletely(photoIdOrPath: string) {
   if (!photo) {
     const clean = cleanStoragePath(photoIdOrPath, bucket);
     if (clean && clean.includes('/')) {
-      await supabaseAdmin.storage.from(bucket).remove([clean]);
+      await deleteFromStorage(clean, bucket);
     }
     return { success: true, message: 'File storage dihapus.' };
   }
@@ -119,10 +84,10 @@ export async function purgePhotoCompletely(photoIdOrPath: string) {
       if (v.audio_path) pathsToDelete.add(cleanStoragePath(v.audio_path, bucket));
     });
 
-    // Remove all files from Supabase Storage
+    // Remove all files from Storage
     const allFiles = Array.from(pathsToDelete);
     if (allFiles.length > 0) {
-      await supabaseAdmin.storage.from(bucket).remove(allFiles);
+      await deleteMultipleFromStorage(allFiles, bucket);
     }
 
     // Delete DB records in order: voice -> photos -> guest
@@ -141,7 +106,7 @@ export async function purgePhotoCompletely(photoIdOrPath: string) {
   // 3. If no guest_id, simply delete photo file & row
   const allFiles = Array.from(pathsToDelete);
   if (allFiles.length > 0) {
-    await supabaseAdmin.storage.from(bucket).remove(allFiles);
+    await deleteMultipleFromStorage(allFiles, bucket);
   }
   await (supabaseAdmin.from('photos') as any).delete().eq('id', photo.id);
 
@@ -157,7 +122,7 @@ export async function purgePhotoCompletely(photoIdOrPath: string) {
  */
 export async function purgeGuestCompletely(guestId: string) {
   const supabaseAdmin = createAdminClient();
-  const bucket = 'virtual-photobooth';
+  const bucket = getStorageBucketName();
   const pathsToDelete = new Set<string>();
 
   // 1. Fetch guest photos & voice messages
@@ -177,7 +142,7 @@ export async function purgeGuestCompletely(guestId: string) {
   // 2. Remove files from storage
   const allFiles = Array.from(pathsToDelete);
   if (allFiles.length > 0) {
-    await supabaseAdmin.storage.from(bucket).remove(allFiles);
+    await deleteMultipleFromStorage(allFiles, bucket);
   }
 
   // 3. Delete database records
@@ -199,24 +164,25 @@ export async function purgeGuestCompletely(guestId: string) {
  */
 export async function purgeVoiceCompletely(voiceId: string) {
   const supabaseAdmin = createAdminClient();
-  const bucket = 'virtual-photobooth';
+  const bucket = getStorageBucketName();
 
   const { data: voice } = await (supabaseAdmin.from('voice_messages') as any)
     .select('id, audio_path')
     .eq('id', voiceId)
     .maybeSingle();
 
-  if (voice?.audio_path) {
+  if (!voice) {
+    return { success: false, message: 'Pesan suara tidak ditemukan.' };
+  }
+
+  if (voice.audio_path) {
     const clean = cleanStoragePath(voice.audio_path, bucket);
-    await supabaseAdmin.storage.from(bucket).remove([clean]);
+    await deleteFromStorage(clean, bucket);
   }
 
   await (supabaseAdmin.from('voice_messages') as any).delete().eq('id', voiceId);
 
-  return {
-    success: true,
-    message: 'Pesan suara berhasil dihapus.',
-  };
+  return { success: true, message: 'Pesan suara berhasil dihapus.' };
 }
 
 /**
@@ -224,7 +190,7 @@ export async function purgeVoiceCompletely(voiceId: string) {
  */
 export async function cleanOrphanedMedia(eventId: string) {
   const supabaseAdmin = createAdminClient();
-  const bucket = 'virtual-photobooth';
+  const bucket = getStorageBucketName();
 
   const [{ data: dbPhotos }, { data: dbVoices }] = await Promise.all([
     (supabaseAdmin.from('photos') as any).select('final_photo_path').eq('event_id', eventId),
@@ -239,8 +205,8 @@ export async function cleanOrphanedMedia(eventId: string) {
   );
 
   const [storagePhotos, storageVoices] = await Promise.all([
-    listAllFilesRecursively(bucket, `events/${eventId}/photos`),
-    listAllFilesRecursively(bucket, `events/${eventId}/voices`),
+    listStorageFiles(`events/${eventId}/photos`, bucket),
+    listStorageFiles(`events/${eventId}/voices`, bucket),
   ]);
 
   const orphanedPhotos = storagePhotos.filter((p) => !activePhotoPaths.has(p));
@@ -248,9 +214,7 @@ export async function cleanOrphanedMedia(eventId: string) {
   const allOrphans = [...orphanedPhotos, ...orphanedVoices];
 
   if (allOrphans.length > 0) {
-    for (let i = 0; i < allOrphans.length; i += 100) {
-      await supabaseAdmin.storage.from(bucket).remove(allOrphans.slice(i, i + 100));
-    }
+    await deleteMultipleFromStorage(allOrphans, bucket);
   }
 
   return {
@@ -262,11 +226,11 @@ export async function cleanOrphanedMedia(eventId: string) {
 }
 
 /**
- * Completely purges an entire event from Supabase Storage and Database.
+ * Completely purges an entire event from Storage and Database.
  */
 export async function purgeEventCompletely(eventId: string) {
   const supabaseAdmin = createAdminClient();
-  const bucket = 'virtual-photobooth';
+  const bucket = getStorageBucketName();
 
   // 1. Collect all known paths from database before deleting rows
   const pathsToDelete = new Set<string>();
@@ -313,16 +277,13 @@ export async function purgeEventCompletely(eventId: string) {
   }
 
   // 2. Recursively find ALL files under events/${eventId} in storage
-  const storageFiles = await listAllFilesRecursively(bucket, `events/${eventId}`);
+  const storageFiles = await listStorageFiles(`events/${eventId}`, bucket);
   storageFiles.forEach((p) => pathsToDelete.add(p));
 
-  // 3. Remove all files from Supabase Storage in chunks of 100
+  // 3. Remove all files from Storage
   const allFilesList = Array.from(pathsToDelete);
   if (allFilesList.length > 0) {
-    for (let i = 0; i < allFilesList.length; i += 100) {
-      const chunk = allFilesList.slice(i, i + 100);
-      await supabaseAdmin.storage.from(bucket).remove(chunk);
-    }
+    await deleteMultipleFromStorage(allFilesList, bucket);
   }
 
   // 4. Delete all database records in cascade order
