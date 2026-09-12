@@ -30,16 +30,28 @@ import {
   Loader2,
   Image as ImageIcon,
 } from 'lucide-react';
+import { validateEventSlug } from '@/lib/events/validate';
+import EventUnavailable from '@/components/guest/EventUnavailable';
 
-export default function GuestPhotoboothClient({ params }: { params: Promise<{ slug: string }> }) {
+interface GuestPhotoboothClientProps {
+  params: Promise<{ slug: string }>;
+  initialEvent?: Event | null;
+  isUnavailable?: boolean;
+}
+
+export default function GuestPhotoboothClient({
+  params,
+  initialEvent,
+  isUnavailable,
+}: GuestPhotoboothClientProps) {
   const { slug } = use(params);
   const supabase = createClient();
 
-  const [event, setEvent] = useState<Event | null>(null);
+  const [event, setEvent] = useState<Event | null>(initialEvent || null);
   const [framePublicUrl, setFramePublicUrl] = useState<string | null>(null);
   const [coverPublicUrl, setCoverPublicUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!initialEvent && !isUnavailable);
+  const [error, setError] = useState<string | null>(isUnavailable ? 'unavailable' : null);
 
   // Flow Step State: 1: Welcome, 2: Camera, 3: Result, 4: Name, 5: Voice, 6: Thanks
   const [step, setStep] = useState<number>(1);
@@ -78,61 +90,44 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const [uploadingVoice, setUploadingVoice] = useState(false);
 
-  // Load Event Details by Slug with Smart Multi-Format Matcher
+  // Load Event Details by Slug with Strict Validation (ONE URL = ONE EVENT)
   useEffect(() => {
+    if (isUnavailable) {
+      setLoading(false);
+      setError('unavailable');
+      return;
+    }
+
+    if (initialEvent) {
+      setEvent(initialEvent);
+      if (initialEvent.frame_path) {
+        const publicUrl = getStoragePublicUrl(initialEvent.frame_path);
+        if (publicUrl) setFramePublicUrl(`${publicUrl}?t=${Date.now()}`);
+      }
+      if (initialEvent.cover_path) {
+        const coverUrl = getStoragePublicUrl(initialEvent.cover_path);
+        if (coverUrl) setCoverPublicUrl(`${coverUrl}?t=${Date.now()}`);
+      } else {
+        const defaultCoverPath = `events/${initialEvent.id}/cover/cover.jpg`;
+        const coverUrl = getStoragePublicUrl(defaultCoverPath);
+        if (coverUrl) setCoverPublicUrl(`${coverUrl}?t=${Date.now()}`);
+      }
+      setLoading(false);
+      return;
+    }
+
     async function loadEventData() {
       try {
         setLoading(true);
-        const decodedSlug = decodeURIComponent(slug);
-        const normalizedSlug = generateSlug(decodedSlug);
+        const result = await validateEventSlug(slug);
 
-        // 1. Try exact slug match
-        let { data } = await (supabase.from('events') as any)
-          .select('*')
-          .eq('slug', decodedSlug)
-          .maybeSingle();
-
-        // 2. Try normalized slug match (hyphenated lowercase)
-        if (!data && normalizedSlug) {
-          const { data: normData } = await (supabase.from('events') as any)
-            .select('*')
-            .eq('slug', normalizedSlug)
-            .maybeSingle();
-          if (normData) data = normData;
+        if (!result.isValid || !result.event) {
+          setEvent(null);
+          setError('unavailable');
+          return;
         }
 
-        // 3. Try case-insensitive ilike match
-        if (!data) {
-          const { data: ilikeData } = await (supabase.from('events') as any)
-            .select('*')
-            .ilike('slug', decodedSlug)
-            .maybeSingle();
-          if (ilikeData) data = ilikeData;
-        }
-
-        // 4. Try ID match if slug is UUID
-        if (!data) {
-          const { data: idData } = await (supabase.from('events') as any)
-            .select('*')
-            .eq('id', decodedSlug)
-            .maybeSingle();
-          if (idData) data = idData;
-        }
-
-        // 5. Fallback only if single active event exists
-        if (!data) {
-          const { data: activeFallback } = await (supabase.from('events') as any)
-            .select('*')
-            .eq('status', 'active')
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (activeFallback) data = activeFallback;
-        }
-
-        if (!data) {
-          throw new Error('Acara tidak ditemukan. Silakan periksa URL atau buat event baru di Admin.');
-        }
+        const data = result.event;
 
         let resolvedMonogram = data.monogram;
         let resolvedSubtitle = data.subtitle;
@@ -178,14 +173,14 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
         }
       } catch (err: any) {
         console.error('Error loading event:', err);
-        setError(err.message || 'Gagal memuat detail photobooth.');
+        setError('unavailable');
       } finally {
         setLoading(false);
       }
     }
 
     loadEventData();
-  }, [slug, supabase]);
+  }, [slug, initialEvent, isUnavailable]);
 
   // Clean up camera stream on unmount or step change
   useEffect(() => {
@@ -553,20 +548,17 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
     );
   }
 
-  if (error || !event) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9F6F0] p-6 text-center">
-        <AlertCircle className="w-12 h-12 text-rose-500 mb-3" />
-        <h2 className="text-lg font-bold text-[#2C2A29]">Photobooth Unavailable</h2>
-        <p className="text-xs text-[#78716C] max-w-xs">{error || 'Event is currently not active.'}</p>
-      </div>
-    );
+  if (error || !event || isUnavailable) {
+    return <EventUnavailable />;
   }
 
   return (
-    <div className={`flex-1 flex flex-col justify-between p-6 sm:p-8 relative overflow-hidden selection:bg-[#B8926A] selection:text-white transition-colors duration-300 ${
-      flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F9F6F0]'
-    }`}>
+    <div className="min-h-screen bg-[#F7F4EF] text-[#2C2A29] flex flex-col items-center justify-center font-sans antialiased selection:bg-[#D4A373] selection:text-white">
+      {/* Mobile Frame Container */}
+      <div className="w-full max-w-md min-h-screen sm:min-h-[92vh] sm:my-4 sm:rounded-[40px] sm:shadow-2xl sm:border sm:border-[#E8E2D8] bg-[#F9F6F0] flex flex-col overflow-hidden relative">
+        <div className={`flex-1 flex flex-col justify-between p-6 sm:p-8 relative overflow-hidden selection:bg-[#B8926A] selection:text-white transition-colors duration-300 ${
+          flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F9F6F0]'
+        }`}>
       {/* STEP 1: WELCOME SCREEN - LUXURY EDITORIAL CARD */}
       {step === 1 && (
         <div className="flex-1 flex flex-col justify-center items-center text-center py-2 sm:py-6 animate-fade-in my-auto w-full">
@@ -1077,6 +1069,8 @@ export default function GuestPhotoboothClient({ params }: { params: Promise<{ sl
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

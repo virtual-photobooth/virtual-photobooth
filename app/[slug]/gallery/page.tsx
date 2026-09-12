@@ -1,7 +1,23 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { validateEventSlug } from '@/lib/events/validate';
 import GuestGalleryClient from '@/components/guest/GuestGalleryClient';
 import EventUnavailable from '@/components/guest/EventUnavailable';
+
+const RESERVED_SLUGS = new Set([
+  'admin',
+  'client',
+  'login',
+  'owner-login',
+  'api',
+  'event',
+  'favicon.ico',
+  'robots.txt',
+  'sitemap.xml',
+  'brand',
+  'landing',
+  '_next',
+]);
 
 export async function generateMetadata({
   params,
@@ -9,6 +25,12 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const decodedSlug = decodeURIComponent(slug).toLowerCase();
+
+  if (RESERVED_SLUGS.has(decodedSlug)) {
+    return {};
+  }
+
   const result = await validateEventSlug(slug, { useAdmin: true });
 
   if (!result.isValid || !result.event) {
@@ -28,8 +50,14 @@ export async function generateMetadata({
   };
 }
 
-export default async function GalleryPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function DirectSlugGalleryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const decodedSlug = decodeURIComponent(slug).toLowerCase();
+
+  if (RESERVED_SLUGS.has(decodedSlug)) {
+    notFound();
+  }
+
   const result = await validateEventSlug(slug, { useAdmin: true });
 
   if (!result.isValid || !result.event) {

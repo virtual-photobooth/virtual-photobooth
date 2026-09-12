@@ -1,8 +1,24 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { validateEventSlug } from '@/lib/events/validate';
 import { getStoragePublicUrl } from '@/lib/storage/url';
 import GuestPhotoboothClient from '@/components/guest/GuestPhotoboothClient';
 import EventUnavailable from '@/components/guest/EventUnavailable';
+
+const RESERVED_SLUGS = new Set([
+  'admin',
+  'client',
+  'login',
+  'owner-login',
+  'api',
+  'event',
+  'favicon.ico',
+  'robots.txt',
+  'sitemap.xml',
+  'brand',
+  'landing',
+  '_next',
+]);
 
 export async function generateMetadata({
   params,
@@ -10,6 +26,12 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const decodedSlug = decodeURIComponent(slug).toLowerCase();
+
+  if (RESERVED_SLUGS.has(decodedSlug)) {
+    return {};
+  }
+
   const result = await validateEventSlug(slug, { useAdmin: true });
 
   if (!result.isValid || !result.event) {
@@ -21,7 +43,6 @@ export async function generateMetadata({
 
   const event = result.event;
 
-  // Cover photo URL or fallback OG Banner image
   let coverUrl = 'https://virtual-photobooth-taupe.vercel.app/og-image.png';
   if (event.cover_path) {
     const publicUrl = getStoragePublicUrl(event.cover_path);
@@ -45,7 +66,7 @@ export async function generateMetadata({
     openGraph: {
       title,
       description,
-      url: `https://virtual-photobooth-taupe.vercel.app/event/${encodeURIComponent(event.slug)}`,
+      url: `https://virtual-photobooth-taupe.vercel.app/${encodeURIComponent(event.slug)}`,
       siteName: 'sebuah.kenang',
       images: [
         {
@@ -67,8 +88,14 @@ export async function generateMetadata({
   };
 }
 
-export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function DirectSlugPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const decodedSlug = decodeURIComponent(slug).toLowerCase();
+
+  if (RESERVED_SLUGS.has(decodedSlug)) {
+    notFound();
+  }
+
   const result = await validateEventSlug(slug, { useAdmin: true });
 
   if (!result.isValid || !result.event) {

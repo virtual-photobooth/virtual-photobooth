@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateSlug } from '@/lib/utils/slug';
+import { validateEventSlug, isEventExpired } from '@/lib/events/validate';
 import { getStoragePublicUrl } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
@@ -21,48 +21,21 @@ export async function GET(request: Request) {
     // 1. Fetch Event Details
     let event: any = null;
 
-    if (eventIdParam) {
+    if (slugParam) {
+      const result = await validateEventSlug(slugParam, { useAdmin: true });
+      if (!result.isValid || !result.event) {
+        return NextResponse.json({ success: false, message: 'Event tidak ditemukan atau sudah berakhir.' }, { status: 404 });
+      }
+      event = result.event;
+    } else if (eventIdParam) {
       const { data } = await (supabaseAdmin.from('events') as any)
         .select('*')
         .eq('id', eventIdParam)
         .maybeSingle();
-      if (data) event = data;
-    }
-
-    if (!event && slugParam) {
-      const decodedSlug = decodeURIComponent(slugParam);
-      const normalizedSlug = generateSlug(decodedSlug);
-
-      let { data } = await (supabaseAdmin.from('events') as any)
-        .select('*')
-        .eq('slug', decodedSlug)
-        .maybeSingle();
-
-      if (!data && normalizedSlug) {
-        const { data: normData } = await (supabaseAdmin.from('events') as any)
-          .select('*')
-          .eq('slug', normalizedSlug)
-          .maybeSingle();
-        if (normData) data = normData;
+      if (!data || data.status !== 'active' || isEventExpired(data.event_date, data.voice_retention_days)) {
+        return NextResponse.json({ success: false, message: 'Event tidak ditemukan atau sudah berakhir.' }, { status: 404 });
       }
-
-      if (!data) {
-        const { data: ilikeData } = await (supabaseAdmin.from('events') as any)
-          .select('*')
-          .ilike('slug', decodedSlug)
-          .maybeSingle();
-        if (ilikeData) data = ilikeData;
-      }
-
-      if (!data) {
-        const { data: idData } = await (supabaseAdmin.from('events') as any)
-          .select('*')
-          .eq('id', decodedSlug)
-          .maybeSingle();
-        if (idData) data = idData;
-      }
-
-      if (data) event = data;
+      event = data;
     }
 
     if (!event) {

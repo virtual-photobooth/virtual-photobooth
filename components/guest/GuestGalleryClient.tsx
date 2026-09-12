@@ -20,6 +20,7 @@ import {
   FolderArchive,
 } from 'lucide-react';
 import Link from 'next/link';
+import EventUnavailable from '@/components/guest/EventUnavailable';
 import {
   batchDownloadGallery,
   exportPhotoWithAudioToVideo,
@@ -289,20 +290,7 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
   }
 
   if (error || !event) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9F6F0] p-6 text-center">
-        <AlertCircle className="w-12 h-12 text-rose-500 mb-3" />
-        <h2 className="text-lg font-bold text-[#2C2A29]">Galeri Tidak Tersedia</h2>
-        <p className="text-xs text-[#78716C] max-w-xs">{error || 'Event tidak ditemukan.'}</p>
-        <Link
-          href={`/event/${encodeURIComponent(slug)}`}
-          className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#2C2A29] text-white text-xs font-semibold"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Kembali ke Photobooth</span>
-        </Link>
-      </div>
-    );
+    return <EventUnavailable />;
   }
 
   return (
