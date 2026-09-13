@@ -144,7 +144,7 @@ export async function GET(request: Request) {
         id: `voice-${v.id}`,
         guestId: v.guest_id,
         guestName,
-        photoUrl: coverPublicUrl || '/default-wedding-cover.png',
+        photoUrl: coverPublicUrl || '',
         voiceUrl,
         durationSeconds: v.duration_seconds || 5,
         createdAt: v.created_at,
@@ -159,7 +159,7 @@ export async function GET(request: Request) {
         event: {
           id: event.id,
           name: event.name,
-          monogram: event.monogram,
+          monogram: event.monogram && event.monogram !== 'WE' && event.monogram !== 'C | B' ? event.monogram.trim() : null,
           subtitle: event.subtitle,
           slug: event.slug,
           event_date: event.event_date,

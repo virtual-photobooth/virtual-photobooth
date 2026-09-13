@@ -68,6 +68,25 @@ export async function GET(
       console.warn('Supabase storage fetch fallback error:', supabaseErr.message);
     }
 
+    // 3. Fallback to production storage endpoint (supports local development when R2 is only on prod)
+    try {
+      const prodRes = await fetch(`https://virtual-photobooth-taupe.vercel.app/api/storage/${cleanKey}`);
+      if (prodRes.ok && prodRes.body) {
+        const headers = new Headers();
+        const contentType = prodRes.headers.get('Content-Type');
+        if (contentType) headers.set('Content-Type', contentType);
+        headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+        headers.set('Access-Control-Allow-Origin', '*');
+
+        return new NextResponse(prodRes.body as any, {
+          status: 200,
+          headers,
+        });
+      }
+    } catch (prodErr: any) {
+      console.warn('Production storage fallback error:', prodErr.message);
+    }
+
     return new NextResponse('File not found', { status: 404 });
   } catch (err: any) {
     console.error('Storage proxy error:', err);

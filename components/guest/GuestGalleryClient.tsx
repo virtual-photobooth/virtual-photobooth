@@ -329,9 +329,9 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 md:p-8">
         {/* Gallery Banner Header */}
         <div className="text-center space-y-2 mb-8 pt-2">
-          {event.monogram && (
+          {event.monogram && event.monogram !== 'WE' && event.monogram !== 'C | B' && (
             <div className="inline-block text-[#8C6D46] font-serif italic text-2xl font-bold tracking-widest px-4">
-              {event.monogram}
+              {event.monogram.trim()}
             </div>
           )}
           <h2 className="font-serif text-2xl sm:text-4xl font-extrabold uppercase tracking-wide text-[#2C2A29]">

@@ -72,7 +72,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         setEvent(eventData as Event);
         if (clientsData?.clients) setClients(clientsData.clients);
 
-        let initialMonogram = eventData.monogram ?? '';
+        let initialMonogram =
+          eventData.monogram && eventData.monogram !== 'WE' && eventData.monogram !== 'C | B'
+            ? eventData.monogram.trim()
+            : '';
         let initialSubtitle = eventData.subtitle ?? '';
 
         if (typeof window !== 'undefined') {
@@ -80,7 +83,12 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           if (savedMeta) {
             try {
               const parsed = JSON.parse(savedMeta);
-              if (parsed.monogram !== undefined) initialMonogram = parsed.monogram;
+              if (parsed.monogram !== undefined) {
+                initialMonogram =
+                  parsed.monogram && parsed.monogram !== 'WE' && parsed.monogram !== 'C | B'
+                    ? parsed.monogram.trim()
+                    : '';
+              }
               if (parsed.subtitle !== undefined) initialSubtitle = parsed.subtitle;
             } catch (e) {}
           }
@@ -456,11 +464,18 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
             </p>
 
             <div className="aspect-[4/3] bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden relative flex items-center justify-center">
-              <img
-                src={coverPreviewUrl || '/default-wedding-cover.png'}
-                alt="Event Cover Preview"
-                className="w-full h-full object-cover"
-              />
+              {coverPreviewUrl ? (
+                <img
+                  src={coverPreviewUrl}
+                  alt="Event Cover Preview"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
+                  <ImageIcon className="w-8 h-8 opacity-40" />
+                  <span className="text-xs">Belum ada foto sampul</span>
+                </div>
+              )}
             </div>
 
             <label className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-all border border-slate-200">

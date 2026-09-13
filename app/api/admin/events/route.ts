@@ -95,8 +95,8 @@ export async function POST(request: Request) {
       frame_path: frame_path || null,
     };
 
-    if (monogram) insertPayload.monogram = monogram;
-    if (subtitle) insertPayload.subtitle = subtitle;
+    insertPayload.monogram = monogram && monogram !== 'WE' && monogram !== 'C | B' ? monogram.trim() : null;
+    insertPayload.subtitle = subtitle ? subtitle.trim() : null;
     if (cover_path) insertPayload.cover_path = cover_path;
 
     let { data, error } = await (supabaseAdmin.from('events') as any)
@@ -138,6 +138,11 @@ export async function PUT(request: Request) {
 
     if (!id) {
       return NextResponse.json({ success: false, message: 'Event ID is required.' }, { status: 400 });
+    }
+
+    if (updateFields.monogram !== undefined) {
+      const m = typeof updateFields.monogram === 'string' ? updateFields.monogram.trim() : '';
+      updateFields.monogram = m && m !== 'WE' && m !== 'C | B' ? m : null;
     }
 
     const supabaseAdmin = createAdminClient();

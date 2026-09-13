@@ -115,7 +115,7 @@ export default function CreateEventPage() {
         body: JSON.stringify({
           client_id: targetClientId,
           name: formData.name,
-          monogram: formData.monogram || 'WE',
+          monogram: formData.monogram?.trim() || null,
           slug: formData.slug,
           event_date: formData.event_date,
           status: formData.status,

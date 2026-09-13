@@ -36,20 +36,28 @@ import EventUnavailable from '@/components/guest/EventUnavailable';
 interface GuestPhotoboothClientProps {
   params: Promise<{ slug: string }>;
   initialEvent?: Event | null;
+  initialCoverUrl?: string | null;
+  initialFrameUrl?: string | null;
   isUnavailable?: boolean;
 }
 
 export default function GuestPhotoboothClient({
   params,
   initialEvent,
+  initialCoverUrl,
+  initialFrameUrl,
   isUnavailable,
 }: GuestPhotoboothClientProps) {
   const { slug } = use(params);
   const supabase = createClient();
 
   const [event, setEvent] = useState<Event | null>(initialEvent || null);
-  const [framePublicUrl, setFramePublicUrl] = useState<string | null>(null);
-  const [coverPublicUrl, setCoverPublicUrl] = useState<string | null>(null);
+  const [framePublicUrl, setFramePublicUrl] = useState<string | null>(
+    initialFrameUrl || (initialEvent?.frame_path ? getStoragePublicUrl(initialEvent.frame_path) : null)
+  );
+  const [coverPublicUrl, setCoverPublicUrl] = useState<string | null>(
+    initialCoverUrl || (initialEvent?.cover_path ? getStoragePublicUrl(initialEvent.cover_path) : null)
+  );
   const [loading, setLoading] = useState(!initialEvent && !isUnavailable);
   const [error, setError] = useState<string | null>(isUnavailable ? 'unavailable' : null);
 
@@ -102,15 +110,13 @@ export default function GuestPhotoboothClient({
       setEvent(initialEvent);
       if (initialEvent.frame_path) {
         const publicUrl = getStoragePublicUrl(initialEvent.frame_path);
-        if (publicUrl) setFramePublicUrl(`${publicUrl}?t=${Date.now()}`);
+        if (publicUrl) setFramePublicUrl(publicUrl);
       }
       if (initialEvent.cover_path) {
         const coverUrl = getStoragePublicUrl(initialEvent.cover_path);
-        if (coverUrl) setCoverPublicUrl(`${coverUrl}?t=${Date.now()}`);
+        if (coverUrl) setCoverPublicUrl(coverUrl);
       } else {
-        const defaultCoverPath = `events/${initialEvent.id}/cover/cover.jpg`;
-        const coverUrl = getStoragePublicUrl(defaultCoverPath);
-        if (coverUrl) setCoverPublicUrl(`${coverUrl}?t=${Date.now()}`);
+        setCoverPublicUrl(null);
       }
       setLoading(false);
       return;
@@ -143,9 +149,14 @@ export default function GuestPhotoboothClient({
           }
         }
 
+        const cleanRawMonogram =
+          resolvedMonogram && resolvedMonogram !== 'WE' && resolvedMonogram !== 'C | B'
+            ? resolvedMonogram.trim()
+            : null;
+
         const mergedEvent = {
           ...data,
-          monogram: resolvedMonogram !== undefined && resolvedMonogram !== null ? resolvedMonogram : (data.monogram || ''),
+          monogram: cleanRawMonogram,
           subtitle: resolvedSubtitle !== undefined && resolvedSubtitle !== null ? resolvedSubtitle : (data.subtitle || ''),
         };
 
@@ -154,22 +165,17 @@ export default function GuestPhotoboothClient({
         if (data.frame_path) {
           const publicUrl = getStoragePublicUrl(data.frame_path);
           if (publicUrl) {
-            setFramePublicUrl(`${publicUrl}?t=${Date.now()}`);
+            setFramePublicUrl(publicUrl);
           }
         }
 
         if (data.cover_path) {
           const coverUrl = getStoragePublicUrl(data.cover_path);
           if (coverUrl) {
-            setCoverPublicUrl(`${coverUrl}?t=${Date.now()}`);
+            setCoverPublicUrl(coverUrl);
           }
         } else {
-          // Fallback check: if cover photo exists under default storage path for event
-          const defaultCoverPath = `events/${data.id}/cover/cover.jpg`;
-          const coverUrl = getStoragePublicUrl(defaultCoverPath);
-          if (coverUrl) {
-            setCoverPublicUrl(`${coverUrl}?t=${Date.now()}`);
-          }
+          setCoverPublicUrl(null);
         }
       } catch (err: any) {
         console.error('Error loading event:', err);
@@ -552,6 +558,13 @@ export default function GuestPhotoboothClient({
     return <EventUnavailable />;
   }
 
+  // Sanitize monogram: strictly exclude 'WE', 'C | B', empty strings, or whitespace
+  const rawMonogram = event?.monogram?.trim();
+  const cleanMonogram =
+    rawMonogram && rawMonogram !== 'WE' && rawMonogram !== 'C | B'
+      ? rawMonogram
+      : null;
+
   return (
     <div className="min-h-screen bg-[#F7F4EF] text-[#2C2A29] flex flex-col items-center justify-center font-sans antialiased selection:bg-[#D4A373] selection:text-white">
       {/* Mobile Frame Container */}
@@ -567,47 +580,47 @@ export default function GuestPhotoboothClient({
             <div className="absolute -top-12 -left-12 w-32 h-32 bg-[#D4A373]/10 rounded-full blur-2xl pointer-events-none" />
             <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-[#8C6D46]/10 rounded-full blur-2xl pointer-events-none" />
 
-            {/* Top Monogram / Gold Diamond Accent */}
-            <div className="space-y-2 pt-1 z-10 w-full">
-              {event.monogram && event.monogram.trim().length > 0 ? (
+            {/* Top Monogram / Eyebrow Header */}
+            {cleanMonogram && (
+              <div className="space-y-2 pt-1 z-10 w-full">
                 <div className="inline-flex items-center justify-center gap-2 text-[#8C6D46] font-serif italic text-2xl font-bold tracking-widest px-4 py-0.5">
-                  <span>{event.monogram}</span>
+                  <span>{cleanMonogram}</span>
                 </div>
-              ) : (
-                <div className="inline-flex items-center justify-center gap-2 text-[#D4A373] text-xs font-serif tracking-widest">
-                  <span className="h-[1px] w-6 bg-[#D4A373]/40 inline-block" />
-                  <span>✦</span>
-                  <span className="h-[1px] w-6 bg-[#D4A373]/40 inline-block" />
-                </div>
-              )}
+              </div>
+            )}
 
-              {/* Event Title & Subtitle Badge */}
-              <div className="space-y-1.5 px-1">
-                <h1 className="font-serif text-2xl sm:text-3xl font-extrabold text-[#2C2A29] uppercase tracking-wider leading-snug">
-                  {event.name}
-                </h1>
+            {/* Event Title & Subtitle Badge */}
+            <div className="space-y-1.5 px-1">
+              <h1 className="font-serif text-2xl sm:text-3xl font-extrabold text-[#2C2A29] uppercase tracking-wider leading-snug">
+                {event.name}
+              </h1>
 
-                <div className="flex items-center justify-center gap-2 pt-0.5 flex-wrap">
-                  {event.subtitle && event.subtitle.trim().length > 0 && (
-                    <span className="text-[10px] uppercase tracking-[0.25em] font-extrabold text-[#8C6D46] bg-[#F4EFE6] px-3 py-1 rounded-full border border-[#E2D9CC]">
-                      {event.subtitle}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-[#78716C] font-semibold font-mono bg-[#F4EFE6]/70 px-3 py-1 rounded-full border border-[#E2D9CC]/60">
-                    {event.event_date}
+              <div className="flex items-center justify-center gap-2 pt-0.5 flex-wrap">
+                {event.subtitle && event.subtitle.trim().length > 0 && (
+                  <span className="text-[10px] uppercase tracking-[0.25em] font-extrabold text-[#8C6D46] bg-[#F4EFE6] px-3 py-1 rounded-full border border-[#E2D9CC]">
+                    {event.subtitle}
                   </span>
-                </div>
+                )}
+                <span className="text-[10px] text-[#78716C] font-semibold font-mono bg-[#F4EFE6]/70 px-3 py-1 rounded-full border border-[#E2D9CC]/60">
+                  {event.event_date}
+                </span>
               </div>
             </div>
 
             {/* Center Cover Photo Container */}
             <div className="w-full relative flex flex-col items-center z-10 px-1 py-1">
               <div className="w-full rounded-2xl overflow-hidden relative shadow-lg border border-[#E2D9CC] bg-[#F4EFE6] flex items-center justify-center p-1">
-                <img
-                  src={coverPublicUrl || '/default-wedding-cover.png'}
-                  alt="Event Cover"
-                  className="w-full h-auto max-h-[30vh] sm:max-h-[35vh] object-contain rounded-xl"
-                />
+                {coverPublicUrl ? (
+                  <img
+                    src={coverPublicUrl}
+                    alt={event.name}
+                    className="w-full h-auto max-h-[30vh] sm:max-h-[35vh] object-contain rounded-xl"
+                  />
+                ) : (
+                  <div className="w-full h-40 sm:h-48 bg-[#F4EFE6] rounded-xl flex items-center justify-center text-[#8C6D46]/30">
+                    <ImageIcon className="w-8 h-8 opacity-40" />
+                  </div>
+                )}
               </div>
               <p className="text-[11px] text-[#78716C] italic font-serif mt-2 relative z-10">
                 Create a memory for our special day

@@ -67,6 +67,8 @@ export async function generateMetadata({
   };
 }
 
+export const dynamic = 'force-dynamic';
+
 export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const result = await validateEventSlug(slug, { useAdmin: true });
@@ -75,5 +77,20 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     return <EventUnavailable />;
   }
 
-  return <GuestPhotoboothClient params={params} initialEvent={result.event} />;
+  const initialCoverUrl = result.event.cover_path
+    ? getStoragePublicUrl(result.event.cover_path)
+    : null;
+
+  const initialFrameUrl = result.event.frame_path
+    ? getStoragePublicUrl(result.event.frame_path)
+    : null;
+
+  return (
+    <GuestPhotoboothClient
+      params={params}
+      initialEvent={result.event}
+      initialCoverUrl={initialCoverUrl}
+      initialFrameUrl={initialFrameUrl}
+    />
+  );
 }
