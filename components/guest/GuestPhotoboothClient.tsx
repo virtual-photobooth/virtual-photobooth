@@ -67,6 +67,7 @@ export default function GuestPhotoboothClient({
   // Camera & Capture State
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [flashEnabled, setFlashEnabled] = useState(false);
+  const [torchActive, setTorchActive] = useState(false);
   const [timerEnabled, setTimerEnabled] = useState(true);
   const [screenFlash, setScreenFlash] = useState(false);
   const [capturedSnapshots, setCapturedSnapshots] = useState<string[]>([]);
@@ -203,25 +204,53 @@ export default function GuestPhotoboothClient({
     };
   }, []);
 
-  const applyTorch = async (enabled: boolean, stream: MediaStream | null = streamRef.current) => {
-    if (!stream) return;
+  const applyTorch = async (enabled: boolean, stream: MediaStream | null = streamRef.current): Promise<boolean> => {
+    if (!stream) return false;
     const track = stream.getVideoTracks()[0];
-    if (!track) return;
+    if (!track || track.readyState !== 'live') return false;
+
+    // Method 1: WebRTC standard advanced constraint
     try {
-      const capabilities = track.getCapabilities?.() as any;
-      if (capabilities && 'torch' in capabilities) {
-        await track.applyConstraints({
-          advanced: [{ torch: enabled }],
-        } as any);
-      }
-    } catch (e) {
-      console.log('Torch constraint not supported or error:', e);
+      await track.applyConstraints({
+        advanced: [{ torch: enabled } as any],
+      });
+      return enabled;
+    } catch (e1) {
+      // ignore & try next method
     }
+
+    // Method 2: Direct constraint
+    try {
+      await track.applyConstraints({
+        torch: enabled,
+      } as any);
+      return enabled;
+    } catch (e2) {
+      // ignore & try next method
+    }
+
+    // Method 3: Chromium ImageCapture API (Android Chrome fallback)
+    try {
+      if (typeof window !== 'undefined' && 'ImageCapture' in window) {
+        const ic = new (window as any).ImageCapture(track);
+        if (ic && track.applyConstraints) {
+          await track.applyConstraints({
+            advanced: [{ fillLightMode: enabled ? 'flash' : 'off', torch: enabled } as any],
+          });
+          return enabled;
+        }
+      }
+    } catch (e3) {
+      // ignore
+    }
+
+    return false;
   };
 
   const stopCamera = () => {
     if (streamRef.current) {
       applyTorch(false, streamRef.current);
+      setTorchActive(false);
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
@@ -246,9 +275,12 @@ export default function GuestPhotoboothClient({
         videoRef.current.srcObject = newStream;
         await videoRef.current.play();
 
-        // If switching to back camera with flash active, turn on LED torch
-        if (flashEnabled && facing === 'environment') {
-          setTimeout(() => applyTorch(true, newStream), 300);
+        // If flash was already enabled, apply torch on new stream
+        if (flashEnabled) {
+          setTimeout(async () => {
+            const success = await applyTorch(true, newStream);
+            setTorchActive(success);
+          }, 350);
         }
       }
     } catch (err) {
@@ -268,9 +300,8 @@ export default function GuestPhotoboothClient({
 
   const toggleCameraFacing = async () => {
     const nextFacing = facingMode === 'user' ? 'environment' : 'user';
-    if (facingMode === 'environment') {
-      await applyTorch(false);
-    }
+    await applyTorch(false);
+    setTorchActive(false);
     setFacingMode(nextFacing);
     await startCamera(nextFacing);
   };
@@ -279,10 +310,9 @@ export default function GuestPhotoboothClient({
     const nextState = !flashEnabled;
     setFlashEnabled(nextState);
 
-    // On rear camera, toggle hardware LED torch
-    if (facingMode === 'environment') {
-      await applyTorch(nextState);
-    }
+    // Try applying torch immediately
+    const isTorchOn = await applyTorch(nextState);
+    setTorchActive(isTorchOn);
   };
 
   const toggleTimer = () => {
@@ -310,11 +340,9 @@ export default function GuestPhotoboothClient({
 
     if (flashEnabled) {
       setScreenFlash(true);
-      if (facingMode === 'environment') {
-        await applyTorch(true);
-      }
+      await applyTorch(true);
       // Wait for screen to become fully white and camera sensor to register light
-      await new Promise((r) => setTimeout(r, 180));
+      await new Promise((r) => setTimeout(r, 220));
     } else {
       await new Promise((r) => setTimeout(r, timerEnabled ? 150 : 50));
     }
@@ -343,7 +371,13 @@ export default function GuestPhotoboothClient({
     }
 
     if (flashEnabled) {
-      setTimeout(() => setScreenFlash(false), 200);
+      setTimeout(() => {
+        setScreenFlash(false);
+        // If not in permanent torch mode, turn off temporary flash torch
+        if (!torchActive) {
+          applyTorch(false);
+        }
+      }, 180);
     }
 
     setCountdown(null);
@@ -598,7 +632,12 @@ export default function GuestPhotoboothClient({
       : null;
 
   return (
-    <div className={`min-h-screen ${flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F7F4EF]'} text-[#2C2A29] flex flex-col items-center justify-center font-sans antialiased selection:bg-[#D4A373] selection:text-white transition-colors duration-300`}>
+    <div className={`min-h-screen ${flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F7F4EF]'} text-[#2C2A29] flex flex-col items-center justify-center font-sans antialiased selection:bg-[#D4A373] selection:text-white transition-colors duration-300 relative`}>
+      {/* Fullscreen White Screen Flash Effect - top-level so it is never clipped by transforms or overflow */}
+      {screenFlash && (
+        <div className="fixed inset-0 bg-white z-[999999] opacity-100 pointer-events-none transition-opacity duration-75" />
+      )}
+
       {/* Mobile Frame Container */}
       <div className={`w-full max-w-md min-h-screen sm:min-h-[92vh] sm:my-4 sm:rounded-[40px] sm:shadow-2xl sm:border ${
         flashEnabled && step === 2
@@ -683,11 +722,6 @@ export default function GuestPhotoboothClient({
       {/* STEP 2: CAMERA VIEW & COUNTDOWN */}
       {step === 2 && (
         <div className="flex-1 flex flex-col justify-between items-center relative animate-fade-in w-full max-h-[100dvh] overflow-hidden py-1 px-1">
-          {/* Fullscreen White Screen Flash Effect */}
-          {screenFlash && (
-            <div className="fixed inset-0 bg-white z-[99999] opacity-100 pointer-events-none transition-opacity duration-75" />
-          )}
-
           {/* Top Controls Header (Clean, Modern & Thumb-Friendly) */}
           <div className="w-full flex items-center justify-between z-20 pb-2 px-1 pt-1 shrink-0 gap-1.5">
             {/* Left: Quick Toggles (Flash & Timer) */}
@@ -706,8 +740,10 @@ export default function GuestPhotoboothClient({
               >
                 {flashEnabled ? (
                   <>
-                    <Zap className="w-3.5 h-3.5 text-white fill-white" />
-                    <span className="text-[11px] font-bold">Flash On</span>
+                    <Zap className="w-3.5 h-3.5 text-white fill-white animate-pulse" />
+                    <span className="text-[11px] font-bold">
+                      {torchActive ? 'LED On' : 'Flash On'}
+                    </span>
                   </>
                 ) : (
                   <>
@@ -763,11 +799,34 @@ export default function GuestPhotoboothClient({
             </button>
           </div>
 
+          {/* Flash Mode Guidance Banner */}
+          {flashEnabled && (
+            <div className="w-full flex justify-center -mt-1 mb-1 z-20 animate-fade-in">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-white/95 text-[#8C6D46] border border-[#D4A373]/50 shadow-md backdrop-blur-md">
+                {torchActive ? (
+                  <>
+                    <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
+                    <span>Lampu Kilat LED Menyala</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>
+                      {facingMode === 'user'
+                        ? 'Flash Layar Aktif (Menerangi Wajah). Balik untuk LED.'
+                        : 'Flash Layar Aktif saat Ambil Foto'}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Video Preview Container (Dynamically Scaled Studio Ring Light) */}
           <div
             className={`w-full max-w-sm aspect-[3/4] max-h-[46vh] sm:max-h-[52vh] rounded-3xl overflow-hidden relative shadow-2xl transition-all shrink-1 my-auto ${
               flashEnabled
-                ? 'border-4 border-white ring-[16px] ring-white shadow-[0_0_100px_rgba(255,255,255,1)] bg-white'
+                ? 'border-4 border-white ring-[18px] ring-white shadow-[0_0_120px_rgba(255,255,255,1)] bg-white'
                 : 'border-2 border-[#E2D9CC] bg-[#1A1817]'
             }`}
           >
