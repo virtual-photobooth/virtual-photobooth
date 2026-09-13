@@ -36,7 +36,10 @@ export async function GET(
 
           if (response.ContentType) headers.set('Content-Type', response.ContentType);
           if (response.ContentLength) headers.set('Content-Length', response.ContentLength.toString());
-          headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+          const cacheControl = cleanKey.includes('/photos/')
+            ? 'public, max-age=31536000, immutable'
+            : 'public, max-age=3600, stale-while-revalidate=86400';
+          headers.set('Cache-Control', cacheControl);
           headers.set('Access-Control-Allow-Origin', '*');
 
           return new NextResponse(stream as any, {
@@ -56,7 +59,10 @@ export async function GET(
       if (!error && blob) {
         const headers = new Headers();
         if (blob.type) headers.set('Content-Type', blob.type);
-        headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+        const cacheControl = cleanKey.includes('/photos/')
+          ? 'public, max-age=31536000, immutable'
+          : 'public, max-age=3600, stale-while-revalidate=86400';
+        headers.set('Cache-Control', cacheControl);
         headers.set('Access-Control-Allow-Origin', '*');
 
         return new NextResponse(blob, {
@@ -75,7 +81,10 @@ export async function GET(
         const headers = new Headers();
         const contentType = prodRes.headers.get('Content-Type');
         if (contentType) headers.set('Content-Type', contentType);
-        headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+        const cacheControl = cleanKey.includes('/photos/')
+          ? 'public, max-age=31536000, immutable'
+          : 'public, max-age=3600, stale-while-revalidate=86400';
+        headers.set('Cache-Control', cacheControl);
         headers.set('Access-Control-Allow-Origin', '*');
 
         return new NextResponse(prodRes.body as any, {

@@ -176,7 +176,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     setMessage(null);
 
     try {
-      const storagePath = `events/${eventId}/cover/cover.jpg`;
+      const ext = coverFile.name.split('.').pop() || 'jpg';
+      const storagePath = `events/${eventId}/cover/cover_${Date.now()}.${ext}`;
       const publicUrl = await uploadFileViaAdminApi(storagePath, coverFile);
 
       await fetch('/api/admin/events', {
@@ -185,7 +186,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         body: JSON.stringify({ id: eventId, cover_path: storagePath }),
       });
 
-      setCoverPreviewUrl(`${publicUrl}?t=${Date.now()}`);
+      setEvent((prev) => (prev ? { ...prev, cover_path: storagePath } : prev));
+      setCoverPreviewUrl(`${publicUrl}?v=${Date.now()}`);
       setCoverFile(null);
       setMessage({ type: 'success', text: 'Cover Photo uploaded successfully!' });
     } catch (err: any) {
@@ -252,15 +254,18 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     setMessage(null);
 
     try {
-      const coverStoragePath = `events/${eventId}/cover/cover.jpg`;
+      let updatedCoverPath = event?.cover_path || undefined;
       const frameStoragePath = `events/${eventId}/frame/frame.png`;
 
       // 1. Auto-upload cover file via Admin API if selected
       if (coverFile) {
         try {
-          const coverUrl = await uploadFileViaAdminApi(coverStoragePath, coverFile);
+          const ext = coverFile.name.split('.').pop() || 'jpg';
+          const newCoverPath = `events/${eventId}/cover/cover_${Date.now()}.${ext}`;
+          const coverUrl = await uploadFileViaAdminApi(newCoverPath, coverFile);
+          updatedCoverPath = newCoverPath;
           setCoverFile(null);
-          setCoverPreviewUrl(`${coverUrl}?t=${Date.now()}`);
+          setCoverPreviewUrl(`${coverUrl}?v=${Date.now()}`);
         } catch (e) {
           console.warn('Cover upload warning:', e);
         }
@@ -285,24 +290,30 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       }
 
       // 3. Update database record via admin API endpoint
+      const updatePayload: any = {
+        id: eventId,
+        client_id: formData.client_id,
+        name: formData.name,
+        monogram: formData.monogram ?? '',
+        subtitle: formData.subtitle ?? '',
+        slug: formData.slug,
+        event_date: formData.event_date,
+        status: formData.status,
+        photo_count: Number(formData.photo_count),
+        countdown_seconds: Number(formData.countdown_seconds),
+        is_voice_enabled: formData.is_voice_enabled,
+        voice_retention_days: Number(formData.voice_retention_days),
+        frame_path: frameStoragePath,
+      };
+
+      if (updatedCoverPath !== undefined) {
+        updatePayload.cover_path = updatedCoverPath;
+      }
+
       const res = await fetch('/api/admin/events', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: eventId,
-          client_id: formData.client_id,
-          name: formData.name,
-          monogram: formData.monogram ?? '',
-          subtitle: formData.subtitle ?? '',
-          slug: formData.slug,
-          event_date: formData.event_date,
-          status: formData.status,
-          photo_count: Number(formData.photo_count),
-          countdown_seconds: Number(formData.countdown_seconds),
-          is_voice_enabled: formData.is_voice_enabled,
-          voice_retention_days: Number(formData.voice_retention_days),
-          frame_path: frameStoragePath,
-        }),
+        body: JSON.stringify(updatePayload),
       });
 
       const resData = await res.json();
@@ -317,6 +328,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
               ...prev,
               monogram: formData.monogram ?? '',
               subtitle: formData.subtitle ?? '',
+              ...(updatedCoverPath !== undefined ? { cover_path: updatedCoverPath } : {}),
             }
           : prev
       );

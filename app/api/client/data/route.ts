@@ -142,13 +142,14 @@ export async function GET(request: Request) {
     });
 
     const enrichedEvents = events.map((e: any) => {
+      const cb = e.updated_at ? `?v=${new Date(e.updated_at).getTime()}` : '';
       let coverUrl = null;
       let frameUrl = null;
       if (e.cover_path) {
-        coverUrl = getStoragePublicUrl(e.cover_path);
+        coverUrl = `${getStoragePublicUrl(e.cover_path)}${cb}`;
       }
       if (e.frame_path) {
-        frameUrl = getStoragePublicUrl(e.frame_path);
+        frameUrl = `${getStoragePublicUrl(e.frame_path)}${cb}`;
       }
       return { ...e, coverUrl, frameUrl };
     });

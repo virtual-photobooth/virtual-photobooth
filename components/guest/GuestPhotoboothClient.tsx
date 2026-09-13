@@ -108,13 +108,19 @@ export default function GuestPhotoboothClient({
 
     if (initialEvent) {
       setEvent(initialEvent);
-      if (initialEvent.frame_path) {
+      if (initialFrameUrl) {
+        setFramePublicUrl(initialFrameUrl);
+      } else if (initialEvent.frame_path) {
         const publicUrl = getStoragePublicUrl(initialEvent.frame_path);
         if (publicUrl) setFramePublicUrl(publicUrl);
       }
-      if (initialEvent.cover_path) {
+
+      if (initialCoverUrl) {
+        setCoverPublicUrl(initialCoverUrl);
+      } else if (initialEvent.cover_path) {
+        const cb = initialEvent.updated_at ? `?v=${new Date(initialEvent.updated_at).getTime()}` : '';
         const coverUrl = getStoragePublicUrl(initialEvent.cover_path);
-        if (coverUrl) setCoverPublicUrl(coverUrl);
+        if (coverUrl) setCoverPublicUrl(`${coverUrl}${cb}`);
       } else {
         setCoverPublicUrl(null);
       }
@@ -162,17 +168,19 @@ export default function GuestPhotoboothClient({
 
         setEvent(mergedEvent as Event);
 
+        const cacheBust = data.updated_at ? `?v=${new Date(data.updated_at).getTime()}` : '';
+
         if (data.frame_path) {
           const publicUrl = getStoragePublicUrl(data.frame_path);
           if (publicUrl) {
-            setFramePublicUrl(publicUrl);
+            setFramePublicUrl(`${publicUrl}${cacheBust}`);
           }
         }
 
         if (data.cover_path) {
           const coverUrl = getStoragePublicUrl(data.cover_path);
           if (coverUrl) {
-            setCoverPublicUrl(coverUrl);
+            setCoverPublicUrl(`${coverUrl}${cacheBust}`);
           }
         } else {
           setCoverPublicUrl(null);
@@ -195,8 +203,25 @@ export default function GuestPhotoboothClient({
     };
   }, []);
 
+  const applyTorch = async (enabled: boolean, stream: MediaStream | null = streamRef.current) => {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
+    try {
+      const capabilities = track.getCapabilities?.() as any;
+      if (capabilities && 'torch' in capabilities) {
+        await track.applyConstraints({
+          advanced: [{ torch: enabled }],
+        } as any);
+      }
+    } catch (e) {
+      console.log('Torch constraint not supported or error:', e);
+    }
+  };
+
   const stopCamera = () => {
     if (streamRef.current) {
+      applyTorch(false, streamRef.current);
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
@@ -220,6 +245,11 @@ export default function GuestPhotoboothClient({
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
         await videoRef.current.play();
+
+        // If switching to back camera with flash active, turn on LED torch
+        if (flashEnabled && facing === 'environment') {
+          setTimeout(() => applyTorch(true, newStream), 300);
+        }
       }
     } catch (err) {
       console.error('Camera access error:', err);
@@ -238,6 +268,9 @@ export default function GuestPhotoboothClient({
 
   const toggleCameraFacing = async () => {
     const nextFacing = facingMode === 'user' ? 'environment' : 'user';
+    if (facingMode === 'environment') {
+      await applyTorch(false);
+    }
     setFacingMode(nextFacing);
     await startCamera(nextFacing);
   };
@@ -245,20 +278,10 @@ export default function GuestPhotoboothClient({
   const toggleFlash = async () => {
     const nextState = !flashEnabled;
     setFlashEnabled(nextState);
-    if (streamRef.current) {
-      const track = streamRef.current.getVideoTracks()[0];
-      if (track) {
-        try {
-          const capabilities = track.getCapabilities() as any;
-          if (capabilities && capabilities.torch) {
-            await track.applyConstraints({
-              advanced: [{ torch: nextState }],
-            } as any);
-          }
-        } catch (e) {
-          console.log('Torch constraint not supported on this track');
-        }
-      }
+
+    // On rear camera, toggle hardware LED torch
+    if (facingMode === 'environment') {
+      await applyTorch(nextState);
     }
   };
 
@@ -287,9 +310,14 @@ export default function GuestPhotoboothClient({
 
     if (flashEnabled) {
       setScreenFlash(true);
-      setTimeout(() => setScreenFlash(false), 350);
+      if (facingMode === 'environment') {
+        await applyTorch(true);
+      }
+      // Wait for screen to become fully white and camera sensor to register light
+      await new Promise((r) => setTimeout(r, 180));
+    } else {
+      await new Promise((r) => setTimeout(r, timerEnabled ? 150 : 50));
     }
-    await new Promise((r) => setTimeout(r, timerEnabled ? 200 : 80));
 
     // Snap frame from video
     if (videoRef.current) {
@@ -312,6 +340,10 @@ export default function GuestPhotoboothClient({
           return updated;
         });
       }
+    }
+
+    if (flashEnabled) {
+      setTimeout(() => setScreenFlash(false), 200);
     }
 
     setCountdown(null);
@@ -566,9 +598,13 @@ export default function GuestPhotoboothClient({
       : null;
 
   return (
-    <div className="min-h-screen bg-[#F7F4EF] text-[#2C2A29] flex flex-col items-center justify-center font-sans antialiased selection:bg-[#D4A373] selection:text-white">
+    <div className={`min-h-screen ${flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F7F4EF]'} text-[#2C2A29] flex flex-col items-center justify-center font-sans antialiased selection:bg-[#D4A373] selection:text-white transition-colors duration-300`}>
       {/* Mobile Frame Container */}
-      <div className="w-full max-w-md min-h-screen sm:min-h-[92vh] sm:my-4 sm:rounded-[40px] sm:shadow-2xl sm:border sm:border-[#E8E2D8] bg-[#F9F6F0] flex flex-col overflow-hidden relative">
+      <div className={`w-full max-w-md min-h-screen sm:min-h-[92vh] sm:my-4 sm:rounded-[40px] sm:shadow-2xl sm:border ${
+        flashEnabled && step === 2
+          ? 'sm:border-white bg-white shadow-[0_0_80px_rgba(255,255,255,1)]'
+          : 'sm:border-[#E8E2D8] bg-[#F9F6F0]'
+      } flex flex-col overflow-hidden relative transition-colors duration-300`}>
         <div className={`flex-1 flex flex-col justify-between p-6 sm:p-8 relative overflow-hidden selection:bg-[#B8926A] selection:text-white transition-colors duration-300 ${
           flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F9F6F0]'
         }`}>
@@ -649,7 +685,7 @@ export default function GuestPhotoboothClient({
         <div className="flex-1 flex flex-col justify-between items-center relative animate-fade-in w-full max-h-[100dvh] overflow-hidden py-1 px-1">
           {/* Fullscreen White Screen Flash Effect */}
           {screenFlash && (
-            <div className="fixed inset-0 bg-white z-[99999] opacity-100 pointer-events-none animate-pulse transition-opacity duration-150" />
+            <div className="fixed inset-0 bg-white z-[99999] opacity-100 pointer-events-none transition-opacity duration-75" />
           )}
 
           {/* Top Controls Header (Clean, Modern & Thumb-Friendly) */}
@@ -671,7 +707,7 @@ export default function GuestPhotoboothClient({
                 {flashEnabled ? (
                   <>
                     <Zap className="w-3.5 h-3.5 text-white fill-white" />
-                    <span className="text-[11px] font-bold">Flash</span>
+                    <span className="text-[11px] font-bold">Flash On</span>
                   </>
                 ) : (
                   <>

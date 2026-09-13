@@ -102,5 +102,24 @@ export default async function DirectSlugPage({ params }: { params: Promise<{ slu
     return <EventUnavailable />;
   }
 
-  return <GuestPhotoboothClient params={params} initialEvent={result.event} />;
+  const cacheBuster = result.event.updated_at
+    ? `?v=${new Date(result.event.updated_at).getTime()}`
+    : '';
+
+  const initialCoverUrl = result.event.cover_path
+    ? `${getStoragePublicUrl(result.event.cover_path)}${cacheBuster}`
+    : null;
+
+  const initialFrameUrl = result.event.frame_path
+    ? `${getStoragePublicUrl(result.event.frame_path)}${cacheBuster}`
+    : null;
+
+  return (
+    <GuestPhotoboothClient
+      params={params}
+      initialEvent={result.event}
+      initialCoverUrl={initialCoverUrl}
+      initialFrameUrl={initialFrameUrl}
+    />
+  );
 }

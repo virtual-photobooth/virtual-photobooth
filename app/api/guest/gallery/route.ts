@@ -45,7 +45,8 @@ export async function GET(request: Request) {
     // Resolve cover URL
     let coverPublicUrl: string | null = null;
     if (event.cover_path) {
-      coverPublicUrl = getStoragePublicUrl(event.cover_path);
+      const cb = event.updated_at ? `?v=${new Date(event.updated_at).getTime()}` : '';
+      coverPublicUrl = `${getStoragePublicUrl(event.cover_path)}${cb}`;
     }
 
     // 2. Fetch Photos for this Event
