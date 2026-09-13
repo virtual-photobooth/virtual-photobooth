@@ -262,7 +262,7 @@ export default function RootPage() {
                     Capture
                   </h3>
                   <p className="text-xs text-[#666666] mt-2 leading-relaxed">
-                    Ambil foto dengan frame pilihanmu.
+                    Pilih frame favoritmu (portrait, landscape, atau persegi) dan ambil pose terbaik.
                   </p>
                 </div>
 
@@ -464,8 +464,20 @@ export default function RootPage() {
               </h2>
 
               <p className="mt-6 text-[#666666] text-sm sm:text-base leading-relaxed">
-                Upload frame sendiri atau pilih dari koleksi kami. Sesuaikan dengan tema dan gaya event kamu.
+                Bebas berkreasi tanpa batas format: <strong>Portrait, Landscape, Square, maupun rasio kustom</strong>. Anda juga dapat menyediakan beberapa opsi frame sekaligus dalam 1 event dengan variasi 1 hingga 4+ pose foto.
               </p>
+
+              <div className="mt-6 flex flex-wrap gap-2 text-[11px] font-medium text-[#111111]">
+                <span className="px-3 py-1 rounded-full bg-white border border-[#E5E5E5] shadow-2xs">
+                  ✦ Portrait & Landscape Bebas
+                </span>
+                <span className="px-3 py-1 rounded-full bg-white border border-[#E5E5E5] shadow-2xs">
+                  ✦ Multi-Frame per Event
+                </span>
+                <span className="px-3 py-1 rounded-full bg-white border border-[#E5E5E5] shadow-2xs">
+                  ✦ 1, 2, 3, hingga 4+ Pose
+                </span>
+              </div>
 
               <div className="mt-8">
                 <a
@@ -617,10 +629,10 @@ export default function RootPage() {
                   02
                 </span>
                 <h3 className="text-xl font-normal text-[#111111] tracking-tight">
-                  Upload your frame
+                  Upload your frames
                 </h3>
                 <p className="mt-3 text-xs sm:text-sm text-[#666666] leading-relaxed">
-                  Gunakan desain bingkai PNG kustom sesuai identitas acara atau pilih kurasi template eksklusif kami.
+                  Unggah beberapa desain frame PNG sekaligus (portrait, landscape, atau persegi) dengan konfigurasi jumlah pose foto yang fleksibel.
                 </p>
               </div>
             </div>
@@ -758,7 +770,7 @@ export default function RootPage() {
                 <ul className="space-y-4 text-xs sm:text-sm text-[#444444]">
                   <li className="flex items-start gap-3">
                     <Check className="w-4 h-4 text-[#111111] shrink-0 mt-0.5" />
-                    <span>1 Custom PNG Frame Event</span>
+                    <span>1 Custom PNG Frame (Portrait / Landscape Bebas)</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Check className="w-4 h-4 text-[#111111] shrink-0 mt-0.5" />
@@ -814,7 +826,7 @@ export default function RootPage() {
                 <ul className="space-y-4 text-xs sm:text-sm text-white/90">
                   <li className="flex items-start gap-3">
                     <Check className="w-4 h-4 text-[#C5A880] shrink-0 mt-0.5" />
-                    <span>Hingga 3 Pilihan Custom Frame</span>
+                    <span>Hingga 3 Pilihan Multi-Frame (Portrait, Landscape & Pose Bebas)</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Check className="w-4 h-4 text-[#C5A880] shrink-0 mt-0.5" />

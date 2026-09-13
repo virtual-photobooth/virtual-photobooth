@@ -9,9 +9,32 @@ export interface CompositeOptions {
 export async function createFinalPhotoComposite(options: CompositeOptions): Promise<string> {
   const { photos, frameImageUrl, eventName, eventDate, photoCount } = options;
 
-  // Target high resolution: 2160 x 3240 px (2:3 Portrait Aspect Ratio)
-  const canvasWidth = 2160;
-  const canvasHeight = 3240;
+  // Load custom PNG frame first to detect native aspect ratio & dimensions
+  let frameImg: HTMLImageElement | null = null;
+  if (frameImageUrl) {
+    frameImg = await loadFrameImage(frameImageUrl);
+  }
+
+  // Determine dynamic canvas dimensions matching frame aspect ratio
+  // Base maximum dimension is 3240px for print-grade photobooth clarity
+  let canvasWidth = 2160;
+  let canvasHeight = 3240;
+
+  if (frameImg && frameImg.naturalWidth > 0 && frameImg.naturalHeight > 0) {
+    const fW = frameImg.naturalWidth;
+    const fH = frameImg.naturalHeight;
+    const ratio = fW / fH;
+
+    if (fW >= fH) {
+      // Landscape or Square
+      canvasWidth = 3240;
+      canvasHeight = Math.max(1080, Math.round(3240 / ratio));
+    } else {
+      // Portrait
+      canvasHeight = 3240;
+      canvasWidth = Math.max(1080, Math.round(3240 * ratio));
+    }
+  }
 
   const canvas = document.createElement('canvas');
   canvas.width = canvasWidth;
@@ -40,12 +63,6 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     )
   );
 
-  // Load custom PNG frame with CORS/Blob protection to prevent canvas tainting
-  let frameImg: HTMLImageElement | null = null;
-  if (frameImageUrl) {
-    frameImg = await loadFrameImage(frameImageUrl);
-  }
-
   // Calculate layout grid based on photo count
   let slots: Array<{ x: number; y: number; w: number; h: number }> = [];
 
@@ -56,70 +73,120 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     if (autoDetectedSlots && autoDetectedSlots.length === photoCount) {
       slots = autoDetectedSlots;
     } else {
-      // High quality fallback layout matching standard 2:3 portrait photobooth PNG templates
-      if (photoCount === 2) {
-        const paddingX = 120;
-        const paddingTop = 260;
-        const bottomPadding = 300;
-        const gap = 80;
-        const availableH = canvasHeight - paddingTop - bottomPadding - gap;
-        const cellH = Math.max(Math.floor(availableH / 2), 850);
-        const cellW = canvasWidth - paddingX * 2;
+      // High quality fallback layout matching photobooth PNG templates
+      if (canvasWidth >= canvasHeight) {
+        // Landscape fallback layouts
+        const paddingX = Math.round(canvasWidth * 0.05);
+        const paddingY = Math.round(canvasHeight * 0.08);
+        const gap = Math.round(canvasWidth * 0.02);
 
-        slots = [
-          { x: paddingX, y: paddingTop, w: cellW, h: cellH },
-          { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
-        ];
-      } else if (photoCount === 3) {
-        const paddingX = 140;
-        const paddingTop = 240;
-        const bottomPadding = 280;
-        const gap = 50;
-        const cellW = canvasWidth - paddingX * 2;
-        const availableH = canvasHeight - paddingTop - bottomPadding - gap * 2;
-        const cellH = Math.max(Math.floor(availableH / 3), 750);
+        if (photoCount === 2) {
+          const cellW = Math.floor((canvasWidth - paddingX * 2 - gap) / 2);
+          const cellH = canvasHeight - paddingY * 2;
+          slots = [
+            { x: paddingX, y: paddingY, w: cellW, h: cellH },
+            { x: paddingX + cellW + gap, y: paddingY, w: cellW, h: cellH },
+          ];
+        } else if (photoCount === 3) {
+          const cellW = Math.floor((canvasWidth - paddingX * 2 - gap * 2) / 3);
+          const cellH = canvasHeight - paddingY * 2;
+          slots = [
+            { x: paddingX, y: paddingY, w: cellW, h: cellH },
+            { x: paddingX + cellW + gap, y: paddingY, w: cellW, h: cellH },
+            { x: paddingX + (cellW + gap) * 2, y: paddingY, w: cellW, h: cellH },
+          ];
+        } else if (photoCount === 4) {
+          const cellW = Math.floor((canvasWidth - paddingX * 2 - gap) / 2);
+          const cellH = Math.floor((canvasHeight - paddingY * 2 - gap) / 2);
+          slots = [
+            { x: paddingX, y: paddingY, w: cellW, h: cellH },
+            { x: paddingX + cellW + gap, y: paddingY, w: cellW, h: cellH },
+            { x: paddingX, y: paddingY + cellH + gap, w: cellW, h: cellH },
+            { x: paddingX + cellW + gap, y: paddingY + cellH + gap, w: cellW, h: cellH },
+          ];
+        } else {
+          const cols = Math.ceil(Math.sqrt(photoCount * (canvasWidth / canvasHeight)));
+          const rows = Math.ceil(photoCount / cols);
+          const cellW = Math.floor((canvasWidth - paddingX * 2 - gap * (cols - 1)) / cols);
+          const cellH = Math.floor((canvasHeight - paddingY * 2 - gap * (rows - 1)) / rows);
 
-        slots = [
-          { x: paddingX, y: paddingTop, w: cellW, h: cellH },
-          { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
-          { x: paddingX, y: paddingTop + (cellH + gap) * 2, w: cellW, h: cellH },
-        ];
-      } else if (photoCount === 4) {
-        // Standard 4-photo photobooth 2x2 grid with proper margins and gaps
-        const paddingX = 100;
-        const paddingTop = 280;
-        const bottomPadding = 320;
-        const gapX = 50;
-        const gapY = 60;
-        const cellW = Math.floor((canvasWidth - paddingX * 2 - gapX) / 2);
-        const availableH = canvasHeight - paddingTop - bottomPadding - gapY;
-        const cellH = Math.floor(availableH / 2);
-
-        slots = [
-          { x: paddingX, y: paddingTop, w: cellW, h: cellH },
-          { x: paddingX + cellW + gapX, y: paddingTop, w: cellW, h: cellH },
-          { x: paddingX, y: paddingTop + cellH + gapY, w: cellW, h: cellH },
-          { x: paddingX + cellW + gapX, y: paddingTop + cellH + gapY, w: cellW, h: cellH },
-        ];
+          for (let i = 0; i < photoCount; i++) {
+            const r = Math.floor(i / cols);
+            const c = i % cols;
+            slots.push({
+              x: paddingX + c * (cellW + gap),
+              y: paddingY + r * (cellH + gap),
+              w: cellW,
+              h: cellH,
+            });
+          }
+        }
       } else {
-        const cols = photoCount > 2 ? 2 : 1;
-        const rows = Math.ceil(photoCount / cols);
-        const paddingX = 120;
-        const paddingTop = 280;
-        const bottomPadding = 300;
-        const gap = 50;
-        const cellW = Math.floor((canvasWidth - paddingX * 2 - gap * (cols - 1)) / cols);
-        const cellH = Math.floor((canvasHeight - paddingTop - bottomPadding - gap * (rows - 1)) / rows);
+        // Portrait fallback layouts (Standard 2:3 photobooth)
+        if (photoCount === 2) {
+          const paddingX = 120;
+          const paddingTop = 260;
+          const bottomPadding = 300;
+          const gap = 80;
+          const availableH = canvasHeight - paddingTop - bottomPadding - gap;
+          const cellH = Math.max(Math.floor(availableH / 2), 850);
+          const cellW = canvasWidth - paddingX * 2;
 
-        for (let i = 0; i < photoCount; i++) {
-          const r = Math.floor(i / cols);
-          const c = i % cols;
-          slots.push({
-            x: paddingX + c * (cellW + gap),
-            y: paddingTop + r * (cellH + gap),
-            w: cellW,
-            h: cellH,
-          });
+          slots = [
+            { x: paddingX, y: paddingTop, w: cellW, h: cellH },
+            { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
+          ];
+        } else if (photoCount === 3) {
+          const paddingX = 140;
+          const paddingTop = 240;
+          const bottomPadding = 280;
+          const gap = 50;
+          const cellW = canvasWidth - paddingX * 2;
+          const availableH = canvasHeight - paddingTop - bottomPadding - gap * 2;
+          const cellH = Math.max(Math.floor(availableH / 3), 750);
+
+          slots = [
+            { x: paddingX, y: paddingTop, w: cellW, h: cellH },
+            { x: paddingX, y: paddingTop + cellH + gap, w: cellW, h: cellH },
+            { x: paddingX, y: paddingTop + (cellH + gap) * 2, w: cellW, h: cellH },
+          ];
+        } else if (photoCount === 4) {
+          // Standard 4-photo photobooth 2x2 grid with proper margins and gaps
+          const paddingX = 100;
+          const paddingTop = 280;
+          const bottomPadding = 320;
+          const gapX = 50;
+          const gapY = 60;
+          const cellW = Math.floor((canvasWidth - paddingX * 2 - gapX) / 2);
+          const availableH = canvasHeight - paddingTop - bottomPadding - gapY;
+          const cellH = Math.floor(availableH / 2);
+
+          slots = [
+            { x: paddingX, y: paddingTop, w: cellW, h: cellH },
+            { x: paddingX + cellW + gapX, y: paddingTop, w: cellW, h: cellH },
+            { x: paddingX, y: paddingTop + cellH + gapY, w: cellW, h: cellH },
+            { x: paddingX + cellW + gapX, y: paddingTop + cellH + gapY, w: cellW, h: cellH },
+          ];
+        } else {
+          const cols = photoCount > 2 ? 2 : 1;
+          const rows = Math.ceil(photoCount / cols);
+          const paddingX = 120;
+          const paddingTop = 280;
+          const bottomPadding = 300;
+          const gap = 50;
+          const cellW = Math.floor((canvasWidth - paddingX * 2 - gap * (cols - 1)) / cols);
+          const cellH = Math.floor((canvasHeight - paddingTop - bottomPadding - gap * (rows - 1)) / rows);
+
+          for (let i = 0; i < photoCount; i++) {
+            const r = Math.floor(i / cols);
+            const c = i % cols;
+            slots.push({
+              x: paddingX + c * (cellW + gap),
+              y: paddingTop + r * (cellH + gap),
+              w: cellW,
+              h: cellH,
+            });
+          }
         }
       }
     }
@@ -272,13 +339,14 @@ function drawDefaultBranding(
   eventDate: string
 ) {
   // Top Header Monogram
+  const topY = Math.max(120, Math.round(canvasHeight * 0.07));
   ctx.fillStyle = '#2C2A29';
   ctx.font = 'bold 64px "Playfair Display", Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText('VIRTUAL PHOTOBOOTH', canvasWidth / 2, 220);
+  ctx.fillText('VIRTUAL PHOTOBOOTH', canvasWidth / 2, topY);
 
   // Bottom Event Title & Date
-  const bottomY = canvasHeight - 240;
+  const bottomY = canvasHeight - Math.max(160, Math.round(canvasHeight * 0.075));
   ctx.fillStyle = '#1A1817';
   ctx.font = 'bold 88px "Playfair Display", Georgia, serif';
   ctx.fillText(eventName.toUpperCase(), canvasWidth / 2, bottomY);
@@ -290,8 +358,8 @@ function drawDefaultBranding(
 
 /**
  * 2D Connected-Component (Blob) detection of transparent cutout windows.
- * Accurately detects 2-photo (vertical/horizontal) and 4-photo (2x2 grid or 1x4 vertical strip)
- * windows regardless of overlapping decorations, Barong masks, balloons, or typography.
+ * Accurately detects 2-photo (vertical/horizontal) and 4-photo (2x2 grid or 1x4 strip)
+ * windows regardless of overlapping decorations, orientation, or typography.
  */
 function detectCutoutWindows(
   frameImg: HTMLImageElement,
@@ -300,10 +368,10 @@ function detectCutoutWindows(
   expectedCount: number
 ): Array<{ x: number; y: number; w: number; h: number }> | null {
   try {
-    // We downsample to a fine 216 x 324 grid (matching 2:3 aspect ratio)
-    // for ultra-fast (sub-20ms) and noise-free 2D analysis.
+    // Proportional grid resolution matching target canvas aspect ratio
+    // for ultra-fast (sub-20ms) and distortion-free 2D analysis.
     const gridW = 216;
-    const gridH = 324;
+    const gridH = Math.max(50, Math.round(gridW * (canvasHeight / canvasWidth)));
     const offCanvas = document.createElement('canvas');
     offCanvas.width = gridW;
     offCanvas.height = gridH;
@@ -395,7 +463,11 @@ function detectCutoutWindows(
     }
 
     // Sort detected components in natural reading order: Top-to-bottom, Left-to-right
-    const rowTolerance = (gridH / (expectedCount > 2 ? 4 : 2)) * 0.45;
+    const isLandscape = canvasWidth >= canvasHeight;
+    const rowTolerance = isLandscape
+      ? (gridH / Math.max(2, Math.ceil(expectedCount / 2))) * 0.45
+      : (gridH / (expectedCount > 2 ? 4 : 2)) * 0.45;
+
     candidates.sort((a, b) => {
       if (Math.abs(a.minGy - b.minGy) > rowTolerance) {
         return a.minGy - b.minGy;
@@ -403,7 +475,7 @@ function detectCutoutWindows(
       return a.minGx - b.minGx;
     });
 
-    // Map grid coordinates back to full 2160x3240 canvas dimensions
+    // Map grid coordinates back to full target canvas dimensions
     const slots = candidates.map((c) => {
       const x = Math.round((c.minGx / gridW) * canvasWidth);
       const y = Math.round((c.minGy / gridH) * canvasHeight);

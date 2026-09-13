@@ -41,6 +41,21 @@ export interface Event {
   created_at: string;
   updated_at: string;
   client?: Client;
+  frames?: EventFrame[];
+}
+
+export interface EventFrame {
+  id: string;
+  event_id: string;
+  name: string;
+  frame_path: string;
+  photo_count: number;
+  sort_order: number;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  frameUrl?: string | null;
+  publicUrl?: string | null;
 }
 
 export interface Guest {
@@ -56,8 +71,10 @@ export interface Photo {
   event_id: string;
   guest_id: string | null;
   final_photo_path: string;
+  selected_frame_id?: string | null;
   created_at: string;
   guest?: Guest;
+  frame?: EventFrame;
 }
 
 export interface VoiceMessage {
@@ -91,6 +108,19 @@ export interface Database {
         Row: Event;
         Insert: Omit<Event, 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string };
         Update: Partial<Omit<Event, 'id'>>;
+        Relationships: [];
+      };
+      event_frames: {
+        Row: EventFrame;
+        Insert: Omit<EventFrame, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string;
+          photo_count?: number;
+          sort_order?: number;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Omit<EventFrame, 'id'>>;
         Relationships: [];
       };
       guests: {

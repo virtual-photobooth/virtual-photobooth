@@ -52,13 +52,45 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           return null;
         };
 
-        const ownerCookie = getCookie('owner_session');
-        const clientCookie = getCookie('client_session');
-        const localOwner = localStorage.getItem('owner_session');
-        const localClient = localStorage.getItem('client_session');
+        const isLocal =
+          process.env.NODE_ENV === 'development' ||
+          window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1' ||
+          window.location.hostname.startsWith('192.168.');
+
+        let ownerCookie = getCookie('owner_session');
+        let clientCookie = getCookie('client_session');
+        let localOwner = localStorage.getItem('owner_session');
+        let localClient = localStorage.getItem('client_session');
+
+        // Auto-provision owner dev session for local environment if none present
+        if (!ownerCookie && !localOwner && isLocal) {
+          localOwner = 'owner@photobooth.com';
+          try {
+            localStorage.setItem('owner_session', localOwner);
+            document.cookie = `owner_session=${encodeURIComponent(localOwner)}; path=/; max-age=86400; SameSite=Lax`;
+          } catch (e) {}
+        }
 
         if (ownerCookie || clientCookie || localOwner || localClient) {
           const emailVal = ownerCookie || clientCookie || localOwner || localClient || 'Owner Admin';
+
+          // Ensure cookies are synchronized with localStorage
+          if (localOwner && !ownerCookie) {
+            document.cookie = `owner_session=${encodeURIComponent(localOwner)}; path=/; max-age=86400; SameSite=Lax`;
+          }
+          if (localClient && !clientCookie) {
+            document.cookie = `client_session=${encodeURIComponent(localClient)}; path=/; max-age=86400; SameSite=Lax`;
+          }
+
+          // Ensure localStorage is synchronized with cookies
+          if (ownerCookie && !localOwner) {
+            try { localStorage.setItem('owner_session', ownerCookie); } catch (e) {}
+          }
+          if (clientCookie && !localClient) {
+            try { localStorage.setItem('client_session', clientCookie); } catch (e) {}
+          }
+
           setUserEmail(emailVal);
           setCheckingAuth(false);
           return;

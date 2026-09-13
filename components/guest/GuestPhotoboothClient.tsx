@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, use } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { Event } from '@/lib/types/database';
+import { Event, EventFrame } from '@/lib/types/database';
 import { createFinalPhotoComposite } from '@/lib/utils/canvas';
 import { generateSlug } from '@/lib/utils/slug';
 import { getStoragePublicUrl } from '@/lib/storage/url';
@@ -32,12 +32,15 @@ import {
 } from 'lucide-react';
 import { validateEventSlug } from '@/lib/events/validate';
 import EventUnavailable from '@/components/guest/EventUnavailable';
+import FrameSelector from './FrameSelector';
+import ResultFrameSwitcher from './ResultFrameSwitcher';
 
 interface GuestPhotoboothClientProps {
   params: Promise<{ slug: string }>;
   initialEvent?: Event | null;
   initialCoverUrl?: string | null;
   initialFrameUrl?: string | null;
+  initialFrames?: EventFrame[] | null;
   isUnavailable?: boolean;
 }
 
@@ -46,14 +49,66 @@ export default function GuestPhotoboothClient({
   initialEvent,
   initialCoverUrl,
   initialFrameUrl,
+  initialFrames,
   isUnavailable,
 }: GuestPhotoboothClientProps) {
   const { slug } = use(params);
   const supabase = createClient();
 
   const [event, setEvent] = useState<Event | null>(initialEvent || null);
+
+  // Multi-frame state
+  const [frames, setFrames] = useState<EventFrame[]>(() => {
+    if (initialFrames && initialFrames.length > 0) return initialFrames;
+    if (initialEvent?.frame_path) {
+      const fallbackUrl = initialFrameUrl || getStoragePublicUrl(initialEvent.frame_path);
+      return [
+        {
+          id: 'legacy-default',
+          event_id: initialEvent.id,
+          name: 'Default Frame',
+          frame_path: initialEvent.frame_path,
+          photo_count: initialEvent.photo_count || 4,
+          sort_order: 0,
+          is_default: true,
+          created_at: initialEvent.created_at || new Date().toISOString(),
+          updated_at: initialEvent.updated_at || new Date().toISOString(),
+          frameUrl: fallbackUrl,
+          publicUrl: fallbackUrl,
+        },
+      ];
+    }
+    return [];
+  });
+
+  const [selectedFrame, setSelectedFrame] = useState<EventFrame | null>(() => {
+    if (initialFrames && initialFrames.length > 0) {
+      return initialFrames.find((f) => f.is_default) || initialFrames[0];
+    }
+    if (initialEvent?.frame_path) {
+      const fallbackUrl = initialFrameUrl || getStoragePublicUrl(initialEvent.frame_path);
+      return {
+        id: 'legacy-default',
+        event_id: initialEvent.id,
+        name: 'Default Frame',
+        frame_path: initialEvent.frame_path,
+        photo_count: initialEvent.photo_count || 4,
+        sort_order: 0,
+        is_default: true,
+        created_at: initialEvent.created_at || new Date().toISOString(),
+        updated_at: initialEvent.updated_at || new Date().toISOString(),
+        frameUrl: fallbackUrl,
+        publicUrl: fallbackUrl,
+      };
+    }
+    return null;
+  });
+
+  // Active photo count strictly driven by selected frame (fallback to event.photo_count)
+  const activePhotoCount = selectedFrame?.photo_count || event?.photo_count || 4;
+
   const [framePublicUrl, setFramePublicUrl] = useState<string | null>(
-    initialFrameUrl || (initialEvent?.frame_path ? getStoragePublicUrl(initialEvent.frame_path) : null)
+    selectedFrame?.publicUrl || selectedFrame?.frameUrl || initialFrameUrl || (initialEvent?.frame_path ? getStoragePublicUrl(initialEvent.frame_path) : null)
   );
   const [coverPublicUrl, setCoverPublicUrl] = useState<string | null>(
     initialCoverUrl || (initialEvent?.cover_path ? getStoragePublicUrl(initialEvent.cover_path) : null)
@@ -61,7 +116,7 @@ export default function GuestPhotoboothClient({
   const [loading, setLoading] = useState(!initialEvent && !isUnavailable);
   const [error, setError] = useState<string | null>(isUnavailable ? 'unavailable' : null);
 
-  // Flow Step State: 1: Welcome, 2: Camera, 3: Result, 4: Name, 5: Voice, 6: Thanks
+  // Flow Step State: 1: Welcome, 1.5: Frame Select, 2: Camera, 3: Result, 4: Name, 5: Voice, 6: Thanks
   const [step, setStep] = useState<number>(1);
 
   // Camera & Capture State
@@ -82,6 +137,7 @@ export default function GuestPhotoboothClient({
   const compositedImageRef = useRef<string | null>(null);
   const capturedSnapshotsRef = useRef<string[]>([]);
   const [processingComposite, setProcessingComposite] = useState(false);
+  const [switchingFrameId, setSwitchingFrameId] = useState<string | null>(null);
 
   // Guest Details & Guestbook
   const [guestName, setGuestName] = useState('');
@@ -109,10 +165,31 @@ export default function GuestPhotoboothClient({
 
     if (initialEvent) {
       setEvent(initialEvent);
-      if (initialFrameUrl) {
-        setFramePublicUrl(initialFrameUrl);
+
+      if (initialFrames && initialFrames.length > 0) {
+        setFrames(initialFrames);
+        const def = initialFrames.find((f) => f.is_default) || initialFrames[0];
+        setSelectedFrame(def);
+        if (def.publicUrl || def.frameUrl) {
+          setFramePublicUrl(def.publicUrl || def.frameUrl || null);
+        }
       } else if (initialEvent.frame_path) {
-        const publicUrl = getStoragePublicUrl(initialEvent.frame_path);
+        const publicUrl = initialFrameUrl || getStoragePublicUrl(initialEvent.frame_path);
+        const legacyFrame: EventFrame = {
+          id: 'legacy-default',
+          event_id: initialEvent.id,
+          name: 'Default Frame',
+          frame_path: initialEvent.frame_path,
+          photo_count: initialEvent.photo_count || 4,
+          sort_order: 0,
+          is_default: true,
+          created_at: initialEvent.created_at || new Date().toISOString(),
+          updated_at: initialEvent.updated_at || new Date().toISOString(),
+          frameUrl: publicUrl,
+          publicUrl: publicUrl,
+        };
+        setFrames([legacyFrame]);
+        setSelectedFrame(legacyFrame);
         if (publicUrl) setFramePublicUrl(publicUrl);
       }
 
@@ -171,7 +248,46 @@ export default function GuestPhotoboothClient({
 
         const cacheBust = data.updated_at ? `?v=${new Date(data.updated_at).getTime()}` : '';
 
-        if (data.frame_path) {
+        // Query event_frames for client fallback
+        const { data: dbFrames } = await supabase
+          .from('event_frames')
+          .select('*')
+          .eq('event_id', data.id)
+          .order('is_default', { ascending: false })
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true });
+
+        let loadedFrames: EventFrame[] = (dbFrames || []).map((f: any) => ({
+          ...f,
+          frameUrl: f.frame_path ? `${getStoragePublicUrl(f.frame_path)}${cacheBust}` : null,
+          publicUrl: f.frame_path ? `${getStoragePublicUrl(f.frame_path)}${cacheBust}` : null,
+        }));
+
+        if (loadedFrames.length === 0 && data.frame_path) {
+          const fallbackUrl = `${getStoragePublicUrl(data.frame_path)}${cacheBust}`;
+          loadedFrames = [
+            {
+              id: 'legacy-default',
+              event_id: data.id,
+              name: 'Default Frame',
+              frame_path: data.frame_path,
+              photo_count: data.photo_count || 4,
+              sort_order: 0,
+              is_default: true,
+              created_at: data.created_at || new Date().toISOString(),
+              updated_at: data.updated_at || new Date().toISOString(),
+              frameUrl: fallbackUrl,
+              publicUrl: fallbackUrl,
+            },
+          ];
+        }
+
+        setFrames(loadedFrames);
+        const def = loadedFrames.find((f) => f.is_default) || loadedFrames[0] || null;
+        setSelectedFrame(def);
+        if (def?.publicUrl || def?.frameUrl) {
+          setFramePublicUrl(def.publicUrl || def.frameUrl || null);
+        } else if (data.frame_path) {
           const publicUrl = getStoragePublicUrl(data.frame_path);
           if (publicUrl) {
             setFramePublicUrl(`${publicUrl}${cacheBust}`);
@@ -322,11 +438,12 @@ export default function GuestPhotoboothClient({
   // Trigger Single Photo Capture with Manual Control
   const handleCaptureSinglePhoto = async () => {
     if (!event || capturing) return;
-    const totalPhotos = event.photo_count || 4;
+    const totalPhotos = activePhotoCount;
     if (capturedSnapshots.length >= totalPhotos) return;
 
     setCapturing(true);
     const targetSlotIndex = capturedSnapshots.length;
+    setCurrentPhotoIndex(targetSlotIndex + 1);
     const initialCountdown = event.countdown_seconds || 3;
 
     // Countdown loop for current single photo (only if timer enabled)
@@ -380,6 +497,7 @@ export default function GuestPhotoboothClient({
       }, 180);
     }
 
+    setCurrentPhotoIndex(Math.min(targetSlotIndex + 2, totalPhotos));
     setCountdown(null);
     setCapturing(false);
   };
@@ -406,7 +524,7 @@ export default function GuestPhotoboothClient({
         frameImageUrl: framePublicUrl,
         eventName: event.name,
         eventDate: event.event_date,
-        photoCount: event.photo_count || 4,
+        photoCount: activePhotoCount,
       });
 
       compositedImageRef.current = finalImageBase64;
@@ -417,6 +535,46 @@ export default function GuestPhotoboothClient({
       alert('Gagal memproses foto bingkai. Mencoba kembali...');
     } finally {
       setProcessingComposite(false);
+    }
+  };
+
+  // Switch Result Frame: Re-composite strictly from pristine RAW snapshots + target frame
+  const handleSwitchResultFrame = async (targetFrame: EventFrame) => {
+    if (targetFrame.id === selectedFrame?.id) return;
+
+    const targetPhotos = capturedSnapshots.length > 0 ? capturedSnapshots : capturedSnapshotsRef.current;
+    if (targetFrame.photo_count !== targetPhotos.length) {
+      // Different photo_count: Incompatible in Phase 2C-3, no auto-retake
+      return;
+    }
+
+    if (!event || targetPhotos.length === 0) return;
+
+    setSwitchingFrameId(targetFrame.id);
+    try {
+      const targetFrameUrl =
+        targetFrame.publicUrl ||
+        targetFrame.frameUrl ||
+        (targetFrame.frame_path ? getStoragePublicUrl(targetFrame.frame_path) : null);
+
+      // Re-composite directly from pristine RAW snapshots + target frame design
+      const newComposite = await createFinalPhotoComposite({
+        photos: targetPhotos, // Pristine RAW captured photos (NEVER stacked composites)
+        frameImageUrl: targetFrameUrl,
+        eventName: event.name,
+        eventDate: event.event_date,
+        photoCount: targetFrame.photo_count,
+      });
+
+      compositedImageRef.current = newComposite;
+      setCompositedImage(newComposite);
+      setSelectedFrame(targetFrame);
+      setFramePublicUrl(targetFrameUrl);
+    } catch (err) {
+      console.error('Error switching frame composite:', err);
+      alert('Gagal mengganti bingkai foto. Silakan coba lagi.');
+    } finally {
+      setSwitchingFrameId(null);
     }
   };
 
@@ -563,7 +721,7 @@ export default function GuestPhotoboothClient({
             frameImageUrl: framePublicUrl,
             eventName: event.name,
             eventDate: event.event_date,
-            photoCount: event.photo_count || 4,
+            photoCount: activePhotoCount,
           });
         } catch (e) {
           console.warn('Fallback composite generation:', e);
@@ -577,6 +735,7 @@ export default function GuestPhotoboothClient({
           eventId: event.id,
           guestName: guestName.trim() || 'Tamu Istimewa',
           wishes: guestNote.trim() || null,
+          selectedFrameId: selectedFrame?.id || null,
           photoBase64: targetPhotoBase64 || null,
           voiceBase64: voiceBase64,
           voiceMimeType: recordedMimeType,
@@ -706,8 +865,19 @@ export default function GuestPhotoboothClient({
             <div className="w-full pt-1 z-10">
               <button
                 onClick={() => {
-                  setStep(2);
-                  startCamera();
+                  if (frames.length > 1) {
+                    setStep(1.5);
+                  } else {
+                    const singleFrame = frames[0] || selectedFrame;
+                    if (singleFrame) {
+                      setSelectedFrame(singleFrame);
+                      if (singleFrame.publicUrl || singleFrame.frameUrl) {
+                        setFramePublicUrl(singleFrame.publicUrl || singleFrame.frameUrl || null);
+                      }
+                    }
+                    setStep(2);
+                    startCamera();
+                  }
                 }}
                 className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-bold text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#423E3C]"
               >
@@ -717,6 +887,30 @@ export default function GuestPhotoboothClient({
             </div>
           </div>
         </div>
+      )}
+
+      {/* STEP 1.5: FRAME SELECTOR (Only shown for multi-frame events) */}
+      {step === 1.5 && (
+        <FrameSelector
+          frames={frames}
+          selectedFrame={selectedFrame}
+          onSelectFrame={(frame) => {
+            setSelectedFrame(frame);
+            if (frame.publicUrl || frame.frameUrl) {
+              setFramePublicUrl(frame.publicUrl || frame.frameUrl || null);
+            }
+          }}
+          onConfirm={() => {
+            if (selectedFrame?.publicUrl || selectedFrame?.frameUrl) {
+              setFramePublicUrl(selectedFrame.publicUrl || selectedFrame.frameUrl || null);
+            }
+            setStep(2);
+            startCamera();
+          }}
+          onBack={() => setStep(1)}
+          eventName={event?.name}
+          monogram={event?.monogram}
+        />
       )}
 
       {/* STEP 2: CAMERA VIEW & COUNTDOWN */}
@@ -782,8 +976,8 @@ export default function GuestPhotoboothClient({
             {/* Center: Photo Counter Badge */}
             <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#8C6D46] bg-[#F4EFE6]/95 backdrop-blur-md px-3 py-1.5 rounded-full border border-[#E2D9CC] shadow-xs">
               {capturing
-                ? `Foto ${currentPhotoIndex} / ${event.photo_count}`
-                : `Foto ${Math.min(capturedSnapshots.length + 1, event.photo_count || 4)} / ${event.photo_count}`}
+                ? `Foto ${currentPhotoIndex} / ${activePhotoCount}`
+                : `Foto ${Math.min(capturedSnapshots.length + 1, activePhotoCount)} / ${activePhotoCount}`}
             </div>
 
             {/* Right: Camera Flip Button */}
@@ -856,7 +1050,7 @@ export default function GuestPhotoboothClient({
           <div className="w-full pt-2 pb-1 flex flex-col items-center gap-2 z-20 shrink-0">
             {/* Captured Photos Progress Bar / Thumbnails */}
             <div className="flex items-center justify-center gap-2 mb-0.5">
-              {Array.from({ length: event.photo_count || 4 }).map((_, idx) => {
+              {Array.from({ length: activePhotoCount }).map((_, idx) => {
                 const capturedSrc = capturedSnapshots[idx];
                 const isCurrent = capturedSnapshots.length === idx;
                 return (
@@ -897,7 +1091,7 @@ export default function GuestPhotoboothClient({
               <div className="text-xs font-semibold text-[#8C6D46] tracking-wider uppercase animate-pulse py-2">
                 Memfoto Gambar Ke-{capturedSnapshots.length + 1}...
               </div>
-            ) : capturedSnapshots.length < event.photo_count ? (
+            ) : capturedSnapshots.length < activePhotoCount ? (
               <div className="flex flex-col items-center gap-1.5 w-full max-w-sm px-2">
                 <button
                   onClick={handleCaptureSinglePhoto}
@@ -946,18 +1140,29 @@ export default function GuestPhotoboothClient({
           <div className="space-y-1 pt-2">
             <h2 className="font-serif text-2xl font-bold text-[#2C2A29]">Your Memories</h2>
             <p className="text-xs text-[#78716C] italic font-serif">
-              Composited portrait photo with event frame
+              Composited photo with event frame
             </p>
           </div>
 
           {/* Final Composited Photo Result */}
-          <div className="w-full max-w-xs sm:max-w-sm rounded-3xl overflow-hidden relative shadow-2xl border-4 border-white my-4 bg-transparent flex items-center justify-center">
+          <div className="w-full max-w-xs sm:max-w-md rounded-3xl overflow-hidden relative shadow-2xl border-4 border-white my-3 bg-transparent flex items-center justify-center">
             <img
               src={compositedImage}
               alt="Final Photobooth Memories"
-              className="w-full h-auto object-contain rounded-2xl"
+              className="w-full h-auto max-h-[48vh] object-contain rounded-2xl"
             />
           </div>
+
+          {/* Frame Switcher for Multi-Frame Events */}
+          {frames.length > 1 && (
+            <ResultFrameSwitcher
+              frames={frames}
+              selectedFrame={selectedFrame}
+              currentPhotoCount={capturedSnapshots.length || capturedSnapshotsRef.current.length}
+              switchingFrameId={switchingFrameId}
+              onSelectFrame={handleSwitchResultFrame}
+            />
+          )}
 
           {/* Download & Next Steps Action Buttons */}
           <div className="w-full space-y-3 pt-2">
@@ -973,7 +1178,10 @@ export default function GuestPhotoboothClient({
               <button
                 onClick={() => {
                   setCapturedSnapshots([]);
+                  capturedSnapshotsRef.current = [];
                   setCompositedImage(null);
+                  compositedImageRef.current = null;
+                  setCurrentPhotoIndex(1);
                   setStep(2);
                   startCamera();
                 }}

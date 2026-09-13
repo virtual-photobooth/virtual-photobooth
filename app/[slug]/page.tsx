@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { validateEventSlug } from '@/lib/events/validate';
 import { getStoragePublicUrl } from '@/lib/storage/url';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { EventFrame } from '@/lib/types/database';
 import GuestPhotoboothClient from '@/components/guest/GuestPhotoboothClient';
 import EventUnavailable from '@/components/guest/EventUnavailable';
 
@@ -110,9 +112,48 @@ export default async function DirectSlugPage({ params }: { params: Promise<{ slu
     ? `${getStoragePublicUrl(result.event.cover_path)}${cacheBuster}`
     : null;
 
-  const initialFrameUrl = result.event.frame_path
+  // Query event_frames: is_default DESC, sort_order ASC, created_at ASC
+  const supabase = createAdminClient();
+  const { data: dbFrames } = await (supabase.from('event_frames') as any)
+    .select('*')
+    .eq('event_id', result.event.id)
+    .order('is_default', { ascending: false })
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  let initialFrames: EventFrame[] = (dbFrames || []).map((f: any) => {
+    const pubUrl = f.frame_path ? `${getStoragePublicUrl(f.frame_path)}${cacheBuster}` : null;
+    return {
+      ...f,
+      frameUrl: pubUrl,
+      publicUrl: pubUrl,
+    };
+  });
+
+  // Legacy fallback if no rows in event_frames but events.frame_path exists
+  if (initialFrames.length === 0 && result.event.frame_path) {
+    const fallbackUrl = `${getStoragePublicUrl(result.event.frame_path)}${cacheBuster}`;
+    initialFrames = [
+      {
+        id: 'legacy-default',
+        event_id: result.event.id,
+        name: 'Default Frame',
+        frame_path: result.event.frame_path,
+        photo_count: result.event.photo_count || 4,
+        sort_order: 0,
+        is_default: true,
+        created_at: result.event.created_at || new Date().toISOString(),
+        updated_at: result.event.updated_at || new Date().toISOString(),
+        frameUrl: fallbackUrl,
+        publicUrl: fallbackUrl,
+      },
+    ];
+  }
+
+  const defaultFrame = initialFrames.find((f) => f.is_default) || initialFrames[0];
+  const initialFrameUrl = defaultFrame?.publicUrl || (result.event.frame_path
     ? `${getStoragePublicUrl(result.event.frame_path)}${cacheBuster}`
-    : null;
+    : null);
 
   return (
     <GuestPhotoboothClient
@@ -120,6 +161,7 @@ export default async function DirectSlugPage({ params }: { params: Promise<{ slu
       initialEvent={result.event}
       initialCoverUrl={initialCoverUrl}
       initialFrameUrl={initialFrameUrl}
+      initialFrames={initialFrames}
     />
   );
 }

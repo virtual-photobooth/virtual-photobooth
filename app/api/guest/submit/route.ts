@@ -10,6 +10,8 @@ export async function POST(request: Request) {
     const {
       eventId,
       guestName,
+      selectedFrameId,
+      selected_frame_id,
       photoBase64,
       voiceBase64,
       voiceMimeType,
@@ -21,6 +23,29 @@ export async function POST(request: Request) {
     }
 
     const supabaseAdmin = createAdminClient();
+
+    // Validate selectedFrameId if provided
+    const targetFrameId = (selectedFrameId || selected_frame_id || null)?.toString().trim() || null;
+    if (targetFrameId) {
+      const { data: frameRecord, error: frameErr } = await (supabaseAdmin.from('event_frames') as any)
+        .select('id, event_id')
+        .eq('id', targetFrameId)
+        .maybeSingle();
+
+      if (frameErr || !frameRecord) {
+        return NextResponse.json(
+          { success: false, message: 'Frame yang dipilih tidak ditemukan.' },
+          { status: 400 }
+        );
+      }
+
+      if (frameRecord.event_id !== eventId) {
+        return NextResponse.json(
+          { success: false, message: 'Frame yang dipilih tidak valid untuk event ini.' },
+          { status: 400 }
+        );
+      }
+    }
     const finalGuestName = (guestName || 'Tamu Istimewa').trim();
 
     // STEP 0: Ensure Event is ACTIVE & is_voice_enabled=true FIRST so RLS allows inserts into guests, photos, and voice_messages
@@ -79,6 +104,7 @@ export async function POST(request: Request) {
         const { error: insertPhotoErr } = await (supabaseAdmin.from('photos') as any).insert({
           event_id: eventId,
           guest_id: guestId,
+          selected_frame_id: targetFrameId,
           final_photo_path: photoPath || filename,
         });
 

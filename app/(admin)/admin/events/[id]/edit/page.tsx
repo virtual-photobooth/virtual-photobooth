@@ -17,6 +17,8 @@ import {
   QrCode,
   Save,
 } from 'lucide-react';
+import AdminFramesManager from '@/components/admin/AdminFramesManager';
+import { adminFetch } from '@/lib/auth/client-admin-auth';
 
 export default function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: eventId } = use(params);
@@ -44,12 +46,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     voice_retention_days: 7,
   });
 
-  // Frame & Cover Upload State
-  const [frameFile, setFrameFile] = useState<File | null>(null);
-  const [framePreviewUrl, setFramePreviewUrl] = useState<string | null>(null);
-  const [uploadingFrame, setUploadingFrame] = useState(false);
-  const [frameValidationError, setFrameValidationError] = useState<string | null>(null);
-
+  // Cover Upload State
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -64,7 +61,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           .eq('id', eventId)
           .single();
 
-        const clientsRes = await fetch('/api/admin/clients');
+        const clientsRes = await adminFetch('/api/admin/clients');
         const clientsData = await clientsRes.json();
 
         if (eventErr || !eventData) throw eventErr || new Error('Event not found');
@@ -108,13 +105,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           voice_retention_days: eventData.voice_retention_days || 7,
         });
 
-        if (eventData.frame_path) {
-          const publicUrl = getStoragePublicUrl(eventData.frame_path);
-          if (publicUrl) {
-            setFramePreviewUrl(publicUrl);
-          }
-        }
-
         if (eventData.cover_path) {
           const coverUrl = getStoragePublicUrl(eventData.cover_path);
           if (coverUrl) {
@@ -153,7 +143,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       reader.readAsDataURL(file);
     });
 
-    const res = await fetch('/api/admin/storage/upload', {
+    const res = await adminFetch('/api/admin/storage/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -198,55 +188,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   };
 
   // Handle Frame Selection & Aspect Ratio Validation
-  const handleFrameSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFrameValidationError(null);
-    setMessage(null);
-
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate 2:3 aspect ratio and portrait orientation
-    const validation = await validateFrameFile(file);
-
-    if (!validation.valid) {
-      setFrameValidationError(
-        validation.error || 'Invalid frame format. Please upload a portrait PNG with a 2:3 aspect ratio.'
-      );
-      setFrameFile(null);
-      return;
-    }
-
-    setFrameFile(file);
-    const objectUrl = URL.createObjectURL(file);
-    setFramePreviewUrl(objectUrl);
-  };
-
-  // Upload Frame to Supabase Storage via Admin API
-  const handleUploadFrame = async () => {
-    if (!frameFile) return;
-    setUploadingFrame(true);
-    setMessage(null);
-
-    try {
-      const storagePath = `events/${eventId}/frame/frame.png`;
-      const publicUrl = await uploadFileViaAdminApi(storagePath, frameFile);
-
-      await fetch('/api/admin/events', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: eventId, frame_path: storagePath }),
-      });
-
-      setFramePreviewUrl(`${publicUrl}?t=${Date.now()}`);
-      setFrameFile(null);
-      setMessage({ type: 'success', text: 'PNG frame template uploaded successfully!' });
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to upload PNG frame' });
-    } finally {
-      setUploadingFrame(false);
-    }
-  };
-
   // Save Event Details
   const handleSaveDetails = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,7 +196,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
     try {
       let updatedCoverPath = event?.cover_path || undefined;
-      const frameStoragePath = `events/${eventId}/frame/frame.png`;
 
       // 1. Auto-upload cover file via Admin API if selected
       if (coverFile) {
@@ -271,13 +211,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         }
       }
 
-      // 2. Auto-upload frame file via Admin API if selected
-      if (frameFile) {
-        const frameUrl = await uploadFileViaAdminApi(frameStoragePath, frameFile);
-        setFrameFile(null);
-        setFramePreviewUrl(`${frameUrl}?t=${Date.now()}`);
-      }
-
       // Save metadata backup to localStorage so monogram & subtitle changes persist even if DB column is missing
       if (typeof window !== 'undefined') {
         localStorage.setItem(
@@ -289,7 +222,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         );
       }
 
-      // 3. Update database record via admin API endpoint
+      // 2. Update database record via admin API endpoint (leaves frame_path managed by default frame sync)
       const updatePayload: any = {
         id: eventId,
         client_id: formData.client_id,
@@ -303,14 +236,13 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         countdown_seconds: Number(formData.countdown_seconds),
         is_voice_enabled: formData.is_voice_enabled,
         voice_retention_days: Number(formData.voice_retention_days),
-        frame_path: frameStoragePath,
       };
 
       if (updatedCoverPath !== undefined) {
         updatePayload.cover_path = updatedCoverPath;
       }
 
-      const res = await fetch('/api/admin/events', {
+      const res = await adminFetch('/api/admin/events', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatePayload),
@@ -346,7 +278,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -390,90 +322,26 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       )}
 
       {/* Grid: Frame Upload Section + Event Details Form */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: PNG Frame Upload */}
-        <div className="lg:col-span-1 bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs space-y-6 flex flex-col">
-          <div>
-            <h3 className="text-sm font-bold text-[#1A2621] flex items-center gap-2">
-              <ImageIcon className="w-4 h-4 text-emerald-700" />
-              <span>Event PNG Frame</span>
-            </h3>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Upload a <strong>Portrait PNG</strong> (2:3 ratio, e.g. 2160×3240 px) with transparent background.
-            </p>
-          </div>
-
-          {/* Frame Preview Container */}
-          <div className="relative aspect-[2/3] bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center overflow-hidden p-2 group">
-            {framePreviewUrl ? (
-              <img
-                src={framePreviewUrl}
-                alt="Event PNG Frame Preview"
-                className="w-full h-full object-contain rounded-xl"
-              />
-            ) : (
-              <div className="text-center p-4">
-                <ImageIcon className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                <p className="text-xs text-slate-400 font-medium">No frame uploaded</p>
-                <p className="text-[10px] text-slate-400 mt-1">2:3 Portrait PNG</p>
-              </div>
-            )}
-          </div>
-
-          {/* Error Message for invalid aspect ratio or non-portrait */}
-          {frameValidationError && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold leading-relaxed flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{frameValidationError}</span>
-            </div>
-          )}
-
-          {/* Upload Button Controls */}
-          <div className="space-y-3 pt-2 mt-auto">
-            <label className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-all border border-slate-200">
-              <Upload className="w-4 h-4" />
-              <span>{framePreviewUrl ? 'Replace PNG Frame' : 'Select PNG Frame'}</span>
-              <input
-                type="file"
-                accept="image/png"
-                onChange={handleFrameSelection}
-                className="hidden"
-              />
-            </label>
-
-            {frameFile && (
-              <button
-                type="button"
-                onClick={handleUploadFrame}
-                disabled={uploadingFrame}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#2A473E] hover:bg-[#1E362F] text-white text-xs font-semibold shadow-md cursor-pointer disabled:opacity-50"
-              >
-                {uploadingFrame ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Uploading...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Confirm & Upload Frame</span>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-
-          <hr className="border-slate-100 my-4" />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Event Frames (Multi-Frame Management) & Cover Photo */}
+        <div className="lg:col-span-5 space-y-8 flex flex-col">
+          {/* Section: Event Frames */}
+          <AdminFramesManager
+            eventId={eventId}
+            initialFramePath={event?.frame_path}
+          />
 
           {/* Cover Photo Upload Card */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-[#1A2621] uppercase tracking-wider flex items-center gap-2">
-              <ImageIcon className="w-4 h-4 text-[#8C6D46]" />
-              <span>Event Cover Photo (Foto Sampul)</span>
-            </h3>
-            <p className="text-[11px] text-slate-500">
-              Upload couple/event photo for the main Guest Welcome Screen (or leave empty for default).
-            </p>
+          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-[#1A2621] flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-[#8C6D46]" />
+                <span>Event Cover Photo (Foto Sampul)</span>
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Upload couple/event photo for the main Guest Welcome Screen (or leave empty for default).
+              </p>
+            </div>
 
             <div className="aspect-[4/3] bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden relative flex items-center justify-center">
               {coverPreviewUrl ? (
@@ -525,7 +393,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         </div>
 
         {/* Right Column: Settings Form */}
-        <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-3xl p-8 shadow-xs">
+        <div className="lg:col-span-7 bg-white border border-slate-200/80 rounded-3xl p-8 shadow-xs">
           <form onSubmit={handleSaveDetails} className="space-y-6">
             <h3 className="text-sm font-bold text-[#1A2621]">Event Configuration</h3>
 
@@ -640,9 +508,12 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
             {/* Photobooth Custom Parameters */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-2">
-                  Photo Count
+                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">
+                  Default Photo Count
                 </label>
+                <p className="text-[11px] text-slate-400 mb-2">
+                  Jumlah pose fallback event. Saat tamu memilih frame di sebelah kiri, jumlah foto otomatis mengikuti pose frame tersebut.
+                </p>
                 <input
                   type="number"
                   min={1}
