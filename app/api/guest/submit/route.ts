@@ -8,6 +8,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const {
+      action,
+      guestId: inputGuestId,
+      photoId: inputPhotoId,
       eventId,
       guestName,
       selectedFrameId,
@@ -18,11 +21,26 @@ export async function POST(request: Request) {
       durationSeconds,
     } = body;
 
+    const supabaseAdmin = createAdminClient();
+
+    // 0. HANDLE RETAKE / DELETE DRAFT ACTION
+    if (action === 'retake' || action === 'delete') {
+      if (inputPhotoId) {
+        await (supabaseAdmin.from('photos') as any)
+          .delete()
+          .eq('id', inputPhotoId);
+      }
+      if (inputGuestId) {
+        await (supabaseAdmin.from('guests') as any)
+          .delete()
+          .eq('id', inputGuestId);
+      }
+      return NextResponse.json({ success: true, message: 'Draft photo removed for retake' });
+    }
+
     if (!eventId) {
       return NextResponse.json({ success: false, message: 'Event ID wajib diisi.' }, { status: 400 });
     }
-
-    const supabaseAdmin = createAdminClient();
 
     // Validate selectedFrameId if provided
     const targetFrameId = (selectedFrameId || selected_frame_id || null)?.toString().trim() || null;
@@ -46,7 +64,6 @@ export async function POST(request: Request) {
         );
       }
     }
-    const finalGuestName = (guestName || 'Tamu Istimewa').trim();
 
     // STEP 0: Ensure Event is ACTIVE & is_voice_enabled=true FIRST so RLS allows inserts into guests, photos, and voice_messages
     try {
@@ -57,36 +74,44 @@ export async function POST(request: Request) {
       console.warn('Failed to update event status to active:', e);
     }
 
-    // 1. Insert Guest into `guests` table
-    let newGuest: any = null;
-
-    const { data: insertedGuest, error: err1 } = await (supabaseAdmin.from('guests') as any)
-      .insert({
-        event_id: eventId,
-        name: finalGuestName,
-      })
-      .select()
-      .single();
-
-    if (err1) {
-      console.error('Insert guest DB error:', err1.message);
-      if (err1.message.includes('row-level security') || err1.message.includes('RLS')) {
-        return NextResponse.json(
-          { success: false, message: 'Database RLS policy rejected guest insert. Silakan jalankan script SQL perbaikan RLS di Supabase SQL Editor.' },
-          { status: 500 }
-        );
-      }
-    }
-
-    if (!err1 && insertedGuest) {
-      newGuest = insertedGuest;
-    }
-
-    const guestId = newGuest?.id || null;
-    let photoPath = null;
-    let voicePath = null;
+    let guestId = inputGuestId || null;
+    let photoId = inputPhotoId || null;
+    let photoPath: string | null = null;
+    let voicePath: string | null = null;
     let voiceErrorMsg: string | null = null;
     let photoErrorMsg: string | null = null;
+
+    // 1. UPDATE EXISTING GUEST OR INSERT NEW GUEST
+    if (guestId) {
+      if (guestName && guestName.trim()) {
+        await (supabaseAdmin.from('guests') as any)
+          .update({ name: guestName.trim() })
+          .eq('id', guestId);
+      }
+    } else {
+      const finalGuestName = (guestName && guestName.trim()) ? guestName.trim() : 'Tamu Undangan';
+      const { data: insertedGuest, error: err1 } = await (supabaseAdmin.from('guests') as any)
+        .insert({
+          event_id: eventId,
+          name: finalGuestName,
+        })
+        .select()
+        .single();
+
+      if (err1) {
+        console.error('Insert guest DB error:', err1.message);
+        if (err1.message.includes('row-level security') || err1.message.includes('RLS')) {
+          return NextResponse.json(
+            { success: false, message: 'Database RLS policy rejected guest insert. Silakan jalankan script SQL perbaikan RLS di Supabase SQL Editor.' },
+            { status: 500 }
+          );
+        }
+      }
+
+      if (!err1 && insertedGuest) {
+        guestId = insertedGuest.id;
+      }
+    }
 
     // 2. Process & Upload Photo to Storage and `photos` table
     if (photoBase64) {
@@ -101,21 +126,42 @@ export async function POST(request: Request) {
           photoPath = filename;
         }
 
-        const { error: insertPhotoErr } = await (supabaseAdmin.from('photos') as any).insert({
-          event_id: eventId,
-          guest_id: guestId,
-          selected_frame_id: targetFrameId,
-          final_photo_path: photoPath || filename,
-        });
+        if (photoId) {
+          // Update existing photo record (e.g. frame switched in preview)
+          const { error: updatePhotoErr } = await (supabaseAdmin.from('photos') as any)
+            .update({
+              selected_frame_id: targetFrameId,
+              final_photo_path: photoPath || filename,
+            })
+            .eq('id', photoId);
 
-        if (insertPhotoErr) {
-          console.error('Insert photo DB error:', insertPhotoErr.message);
-          photoErrorMsg = `DB insert error: ${insertPhotoErr.message}`;
-          if (insertPhotoErr.message.includes('row-level security') || insertPhotoErr.message.includes('RLS')) {
-            return NextResponse.json(
-              { success: false, message: 'Database RLS policy rejected photo insert. Silakan jalankan script SQL perbaikan RLS di Supabase SQL Editor.' },
-              { status: 500 }
-            );
+          if (updatePhotoErr) {
+            console.error('Update photo DB error:', updatePhotoErr.message);
+            photoErrorMsg = `DB update error: ${updatePhotoErr.message}`;
+          }
+        } else {
+          // Insert new photo record
+          const { data: insertedPhoto, error: insertPhotoErr } = await (supabaseAdmin.from('photos') as any)
+            .insert({
+              event_id: eventId,
+              guest_id: guestId,
+              selected_frame_id: targetFrameId,
+              final_photo_path: photoPath || filename,
+            })
+            .select('id')
+            .single();
+
+          if (insertPhotoErr) {
+            console.error('Insert photo DB error:', insertPhotoErr.message);
+            photoErrorMsg = `DB insert error: ${insertPhotoErr.message}`;
+            if (insertPhotoErr.message.includes('row-level security') || insertPhotoErr.message.includes('RLS')) {
+              return NextResponse.json(
+                { success: false, message: 'Database RLS policy rejected photo insert. Silakan jalankan script SQL perbaikan RLS di Supabase SQL Editor.' },
+                { status: 500 }
+              );
+            }
+          } else if (insertedPhoto) {
+            photoId = insertedPhoto.id;
           }
         }
       } catch (pErr: any) {
@@ -156,7 +202,6 @@ export async function POST(request: Request) {
 
         let expiresAtDate: string;
         if (eventData?.event_date) {
-          // Calculate from event_date + retentionDays at 23:59:59
           const eventDateObj = new Date(eventData.event_date);
           eventDateObj.setDate(eventDateObj.getDate() + retentionDays);
           eventDateObj.setHours(23, 59, 59, 999);
@@ -189,21 +234,18 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check if photo was provided but failed completely
-    if (photoBase64 && !photoPath && photoErrorMsg) {
+    // Check if photo was provided initially but failed completely
+    if (photoBase64 && !photoPath && photoErrorMsg && !inputGuestId) {
       return NextResponse.json(
         { success: false, message: `Gagal menyimpan foto: ${photoErrorMsg}` },
         { status: 500 }
       );
     }
 
-    if (voiceBase64 && !voicePath && voiceErrorMsg) {
-      console.warn('Voice upload failed but photo saved:', voiceErrorMsg);
-    }
-
     return NextResponse.json({
       success: true,
       guestId,
+      photoId,
       photoPath,
       voicePath,
       photoError: photoErrorMsg,

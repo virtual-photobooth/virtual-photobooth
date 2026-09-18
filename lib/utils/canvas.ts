@@ -293,7 +293,25 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     drawDefaultBranding(ctx, canvasWidth, canvasHeight, eventName, eventDate);
   }
 
-  return canvas.toDataURL('image/jpeg', 0.85);
+  const resultDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+  // Memory cleanup: release image resources to avoid OOM crashes on low-end Android devices
+  try {
+    loadedImages.forEach((img) => {
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+    });
+    if (frameImg) {
+      frameImg.onload = null;
+      frameImg.onerror = null;
+      frameImg.src = '';
+    }
+  } catch (e) {
+    // Ignore cleanup error
+  }
+
+  return resultDataUrl;
 }
 
 /**
