@@ -1232,7 +1232,7 @@ export default function GuestPhotoboothClient({
 
           {/* Video Preview Container (Dynamically Scaled Studio Ring Light) */}
           <div
-            className={`w-full max-w-sm aspect-[3/4] max-h-[46vh] sm:max-h-[52vh] rounded-3xl overflow-hidden relative shadow-2xl transition-all shrink-1 my-auto ${
+            className={`w-full max-w-[min(22rem,calc(46vh*3/4))] sm:max-w-[min(24rem,calc(52vh*3/4))] aspect-[3/4] max-h-[46vh] sm:max-h-[52vh] rounded-3xl overflow-hidden relative shadow-2xl transition-all shrink-1 my-auto mx-auto ${
               flashEnabled
                 ? 'border-4 border-white ring-[18px] ring-white shadow-[0_0_120px_rgba(255,255,255,1)] bg-white'
                 : 'border-2 border-[#E2D9CC] bg-[#1A1817]'
@@ -1293,7 +1293,7 @@ export default function GuestPhotoboothClient({
                 ref={videoRef}
                 playsInline
                 muted
-                className={`w-full h-full object-cover ${
+                className={`absolute inset-0 w-full h-full object-cover ${
                   facingMode === 'user' ? 'scale-x-[-1]' : ''
                 }`}
               />
