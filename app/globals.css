@@ -25,7 +25,7 @@ html {
   box-sizing: inherit;
 }
 
-img, video {
+img {
   max-width: 100%;
   height: auto;
 }
