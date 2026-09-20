@@ -3,11 +3,39 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, Menu, X, Play, Pause, Volume2, Sparkles, Check } from 'lucide-react';
+import { ArrowRight, Menu, X, Play, Pause, Volume2, Sparkles, Check, ChevronDown } from 'lucide-react';
 
 export default function RootPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isPlayingVoice, setIsPlayingVoice] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  const faqs = [
+    {
+      q: "Apa itu virtual photobooth untuk wedding dan event?",
+      a: "Virtual photobooth adalah teknologi photobooth interaktif berbasis web. Tamu undangan tidak perlu mengantre di bilik foto fisik atau mengunduh aplikasi apa pun. Cukup pindai (scan) QR code dengan kamera smartphone, berfoto dengan frame kustom bertema pernikahan Anda, membuat GIF bergerak, dan mengirimkan pesan suara (audio guestbook) secara instan.",
+    },
+    {
+      q: "Apakah tamu undangan perlu download atau install aplikasi?",
+      a: "Tidak sama sekali. Virtual photobooth sebuah.kenang 100% berbasis web browser (Safari, Chrome, dsb). Tamu hanya perlu membuka kamera HP, mengarahkan ke barcode / QR code pada meja resepsi atau standing banner, dan photobooth langsung terbuka dalam 2 detik.",
+    },
+    {
+      q: "Apakah desain frame foto bisa dikustomisasi sesuai tema pernikahan kami?",
+      a: "Ya, sangat bisa. Desain frame dapat dikustomisasi sepenuhnya mengikuti tema warna, monogram, nama kedua mempelai, tanggal acara, serta font pernikahan Anda. Kami menyediakan kurasi layout elegan atau Anda dapat menggunakan template kustom dari desainer Anda.",
+    },
+    {
+      q: "Berapa lama galeri foto dan rekaman suara tamu tersimpan?",
+      a: "Seluruh foto, GIF, dan audio guestbook dari para tamu tersimpan aman di cloud gallery selama 1 tahun penuh. Melalui Client Portal, pengantin dan Wedding Organizer (WO) dapat memantau unggahan secara real-time dan mengunduh seluruh file resolusi tinggi (High-Res ZIP) kapan saja.",
+    },
+    {
+      q: "Bagaimana jika ada kerabat yang tidak bisa hadir langsung di lokasi resepsi?",
+      a: "Salah satu keunggulan terbesar virtual photobooth adalah fleksibilitasnya. Anda dapat menyematkan link photobooth di undangan pernikahan digital (e-invitation). Keluarga atau sahabat yang berada di luar kota atau berhalangan hadir tetap dapat mengambil foto berbingkai pernikahan Anda dan mengirimkan ucapan doa dari mana pun.",
+    },
+    {
+      q: "Bagaimana cara memesan layanan sebuah.kenang untuk pernikahan atau event?",
+      a: "Cukup klik tombol 'Book Event' atau hubungi kami via WhatsApp di 0853-3305-0605. Tim kami akan mengecek ketersediaan tanggal acara Anda, membantu pemilihan paket, dan menyiapkan aktivasi photobooth digital hingga hari H acara Anda.",
+    },
+  ];
 
   const toggleVoice = () => {
     setIsPlayingVoice((prev) => !prev);
@@ -48,6 +76,9 @@ export default function RootPage() {
             </a>
             <a href="#pricing" className="hover:text-[#111111] transition-colors">
               Pricing
+            </a>
+            <a href="#faq" className="hover:text-[#111111] transition-colors">
+              FAQ
             </a>
           </nav>
 
@@ -96,6 +127,13 @@ export default function RootPage() {
               className="text-sm tracking-[0.18em] uppercase font-medium text-[#111111]"
             >
               Pricing
+            </a>
+            <a
+              href="#faq"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-sm tracking-[0.18em] uppercase font-medium text-[#111111]"
+            >
+              FAQ
             </a>
             <div className="pt-4 border-t border-[#E5E5E5]">
               <a
@@ -159,7 +197,7 @@ export default function RootPage() {
               </h1>
 
               <p className="mt-3 sm:mt-5 text-xs sm:text-base md:text-lg text-white/80 font-light max-w-sm sm:max-w-md leading-relaxed tracking-wide">
-                Virtual photobooth for moments worth remembering.
+                Virtual photobooth modern untuk wedding, selebrasi & event istimewa. Abadikan foto, GIF, dan audio guestbook instan tanpa aplikasi.
               </p>
 
               <div className="mt-6 sm:mt-10 flex items-center gap-4">
@@ -236,7 +274,7 @@ export default function RootPage() {
                     Open
                   </h3>
                   <p className="text-xs text-[#666666] mt-2 leading-relaxed">
-                    Tamu membuka link event melalui HP.
+                    Tamu scan barcode QR atau buka link event langsung di HP tanpa unduh aplikasi.
                   </p>
                 </div>
 
@@ -915,6 +953,75 @@ export default function RootPage() {
       </section>
 
       {/* =========================================================================
+          8.5 SECTION — FAQ (Pertanyaan Umum & SEO)
+          Editorial, minimal accordion with subtle border transitions.
+          ========================================================================= */}
+      <section id="faq" className="py-24 sm:py-32 bg-white border-b border-[#E5E5E5]">
+        <div className="max-w-4xl mx-auto px-6 md:px-12">
+          {/* Header */}
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs tracking-[0.25em] uppercase font-medium text-[#666666] block mb-3">
+              Frequently Asked Questions
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-light text-[#111111] tracking-tight leading-[1.15]">
+              Segala yang Perlu Kamu Tahu<span className="text-[#B88E44]">.</span>
+            </h2>
+            <p className="mt-4 text-xs sm:text-sm text-[#666666] font-light leading-relaxed">
+              Jawaban seputar layanan virtual photobooth wedding, cara scan QR code tamu, dan kustomisasi frame acara.
+            </p>
+          </div>
+
+          {/* Accordion List */}
+          <div className="space-y-4">
+            {faqs.map((faq, idx) => {
+              const isOpen = openFaq === idx;
+              return (
+                <div
+                  key={idx}
+                  className="border border-[#E5E5E5] rounded-xs overflow-hidden transition-colors duration-200 hover:border-[#111111]"
+                >
+                  <button
+                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    aria-expanded={isOpen}
+                    className="w-full py-5 px-6 sm:px-8 text-left flex items-center justify-between gap-4 bg-white transition-colors cursor-pointer"
+                  >
+                    <span className="text-sm sm:text-base font-normal text-[#111111] tracking-tight">
+                      {faq.q}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-[#666666] shrink-0 transition-transform duration-200 ${
+                        isOpen ? 'rotate-180 text-[#111111]' : ''
+                      }`}
+                    />
+                  </button>
+                  {isOpen && (
+                    <div className="px-6 sm:px-8 pb-6 pt-1 text-xs sm:text-sm text-[#666666] leading-relaxed border-t border-[#F0F0F0] bg-[#FAFAFA]/50 animate-in fade-in duration-200">
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom Help note */}
+          <div className="mt-12 text-center pt-8 border-t border-[#E5E5E5]">
+            <p className="text-xs text-[#666666]">
+              Punya pertanyaan khusus mengenai acara pernikahan atau event Anda?{' '}
+              <a
+                href="https://wa.me/6285333050605?text=Halo%20sebuah.kenang%2C%20saya%20ingin%20konsultasi%20custom%20virtual%20photobooth%20untuk%20acara%20saya."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#111111] font-medium underline underline-offset-4 hover:text-[#B88E44] transition-colors"
+              >
+                Chat tim kami via WhatsApp &rarr;
+              </a>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
           9. FOOTER
           Minimal, quiet, elegant.
           ========================================================================= */}
@@ -942,6 +1049,9 @@ export default function RootPage() {
               </a>
               <a href="#pricing" className="hover:text-[#111111] transition-colors">
                 Pricing
+              </a>
+              <a href="#faq" className="hover:text-[#111111] transition-colors">
+                FAQ
               </a>
               <a
                 href="https://wa.me/6285333050605?text=Halo%20sebuah.kenang%2C%20saya%20ingin%20bertanya%20mengenai%20layanan%20virtual%20photobooth."
