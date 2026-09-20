@@ -137,6 +137,7 @@ export default function GuestPhotoboothClient({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
 
   // Setup Android Chrome Intent URL
   useEffect(() => {
@@ -432,6 +433,7 @@ export default function GuestPhotoboothClient({
           facingMode: facing,
           width: { ideal: 1080 },
           height: { ideal: 1440 },
+          aspectRatio: { ideal: 3 / 4 },
         },
         audio: false,
       };
@@ -496,7 +498,12 @@ export default function GuestPhotoboothClient({
     await applyTorch(false);
     setTorchActive(false);
     setFacingMode(nextFacing);
+    setZoomLevel(1.0);
     await startCamera(nextFacing);
+  };
+
+  const toggleZoom = () => {
+    setZoomLevel((prev) => (prev > 1.1 ? 1.0 : 1.25));
   };
 
   const toggleFlash = async () => {
@@ -541,18 +548,60 @@ export default function GuestPhotoboothClient({
       await new Promise((r) => setTimeout(r, timerEnabled ? 150 : 50));
     }
 
-    // Snap frame from video
+    // Snap frame from video with precise WYSIWYG matching 3:4 preview & zoom
     if (videoRef.current) {
+      const v = videoRef.current;
+      const vw = v.videoWidth || 1080;
+      const vh = v.videoHeight || 1440;
+
+      // Target preview aspect ratio is 3:4 (0.75)
+      const targetAspect = 3 / 4;
+      const videoAspect = vw / vh;
+
+      // Calculate unzoomed 3:4 base crop
+      let baseW = vw;
+      let baseH = vh;
+      if (videoAspect > targetAspect) {
+        // Video is wider than 3:4 (e.g. 4:3 or landscape 16:9)
+        baseW = vh * targetAspect;
+        baseH = vh;
+      } else {
+        // Video is taller than 3:4 (e.g. 9:16 mobile portrait)
+        baseW = vw;
+        baseH = vw / targetAspect;
+      }
+
+      // Apply active zoom level
+      const currentZoom = zoomLevel || 1.0;
+      const cropW = baseW / currentZoom;
+      const cropH = baseH / currentZoom;
+
+      // Determine focal anchor matching preview's object-position (center 42% for front camera)
+      const anchorX = 0.5;
+      const anchorY = facingMode === 'user' ? 0.42 : 0.5;
+
+      const sxRaw = (vw - cropW) * anchorX;
+      const syRaw = (vh - cropH) * anchorY;
+
+      const sx = Math.max(0, Math.min(vw - cropW, sxRaw));
+      const sy = Math.max(0, Math.min(vh - cropH, syRaw));
+      const sw = Math.min(cropW, vw - sx);
+      const sh = Math.min(cropH, vh - sy);
+
+      // Render crisp, standardized 1080x1440 (3:4) canvas snapshot
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth || 1080;
-      canvas.height = videoRef.current.videoHeight || 1440;
+      canvas.width = 1080;
+      canvas.height = 1440;
       const ctx = canvas.getContext('2d');
       if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
         if (facingMode === 'user') {
           ctx.translate(canvas.width, 0);
           ctx.scale(-1, 1);
         }
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(v, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
         setCapturedSnapshots((prev) => {
@@ -952,7 +1001,7 @@ export default function GuestPhotoboothClient({
       : null;
 
   return (
-    <div className={`min-h-screen ${flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F7F4EF]'} text-[#2C2A29] flex flex-col items-center justify-center font-sans antialiased selection:bg-[#D4A373] selection:text-white transition-colors duration-300 relative`}>
+    <div className={`min-h-[100dvh] ${flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F7F4EF]'} text-[#2C2A29] flex flex-col items-center ${step === 2 ? 'justify-start h-[100dvh] overflow-hidden' : 'justify-center min-h-screen'} font-sans antialiased selection:bg-[#D4A373] selection:text-white transition-colors duration-300 relative`}>
       {/* Fullscreen White Screen Flash Effect - top-level so it is never clipped by transforms or overflow */}
       {screenFlash && (
         <div className="fixed inset-0 bg-white z-[999999] opacity-100 pointer-events-none transition-opacity duration-75" />
@@ -964,20 +1013,29 @@ export default function GuestPhotoboothClient({
           width: '100%',
           maxWidth: '448px',
           margin: '0 auto',
-          minHeight: '100vh',
+          height: step === 2 ? '100dvh' : undefined,
+          minHeight: step === 2 ? '100dvh' : '100vh',
           backgroundColor: flashEnabled && step === 2 ? '#ffffff' : '#F9F6F0',
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box',
         }}
-        className={`w-full max-w-md min-h-screen sm:min-h-[92vh] sm:my-4 sm:rounded-[40px] sm:shadow-2xl sm:border ${
+        className={`w-full max-w-md ${
+          step === 2
+            ? 'h-[100dvh] max-h-[100dvh] sm:h-auto sm:min-h-[92vh] sm:my-2'
+            : 'min-h-screen sm:min-h-[92vh] sm:my-4'
+        } sm:rounded-[40px] sm:shadow-2xl sm:border ${
           flashEnabled && step === 2
             ? 'sm:border-white bg-white shadow-[0_0_80px_rgba(255,255,255,1)]'
             : 'sm:border-[#E8E2D8] bg-[#F9F6F0]'
         } flex flex-col overflow-hidden relative transition-colors duration-300`}
       >
-        <div className={`flex-1 flex flex-col justify-between p-6 sm:p-8 relative overflow-hidden selection:bg-[#B8926A] selection:text-white transition-colors duration-300 ${
+        <div className={`flex-1 flex flex-col justify-between ${
+          step === 2
+            ? 'px-3 py-1.5 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-5'
+            : 'p-6 sm:p-8'
+        } relative overflow-hidden selection:bg-[#B8926A] selection:text-white transition-colors duration-300 ${
           flashEnabled && step === 2 ? 'bg-white' : 'bg-[#F9F6F0]'
         }`}>
       {/* STEP 1: WELCOME SCREEN - LUXURY EDITORIAL CARD */}
@@ -1131,7 +1189,7 @@ export default function GuestPhotoboothClient({
       {step === 2 && (
         <div className="flex-1 flex flex-col justify-between items-center relative animate-fade-in w-full max-h-[100dvh] overflow-hidden py-1 px-1">
           {/* Top Controls Header (Clean, Modern & Thumb-Friendly) */}
-          <div className="w-full flex items-center justify-between z-20 pb-2 px-1 pt-1 shrink-0 gap-1.5">
+          <div className="w-full flex items-center justify-between z-20 pb-1.5 px-0.5 pt-0 shrink-0 gap-1.5">
             {/* Left: Quick Toggles (Flash & Timer) */}
             <div className="flex items-center gap-1.5">
               {/* Flash Toggle Button */}
@@ -1232,7 +1290,7 @@ export default function GuestPhotoboothClient({
 
           {/* Video Preview Container (Dynamically Scaled Studio Ring Light) */}
           <div
-            className={`w-full max-w-[min(22rem,calc(46vh*3/4))] sm:max-w-[min(24rem,calc(52vh*3/4))] aspect-[3/4] max-h-[46vh] sm:max-h-[52vh] rounded-3xl overflow-hidden relative shadow-2xl transition-all shrink-1 my-auto mx-auto ${
+            className={`w-full max-w-[min(22rem,calc(44vh*3/4))] sm:max-w-[min(24rem,calc(50vh*3/4))] aspect-[3/4] max-h-[44vh] sm:max-h-[50vh] rounded-3xl overflow-hidden relative shadow-2xl transition-all shrink-1 my-auto mx-auto ${
               flashEnabled
                 ? 'border-4 border-white ring-[18px] ring-white shadow-[0_0_120px_rgba(255,255,255,1)] bg-white'
                 : 'border-2 border-[#E2D9CC] bg-[#1A1817]'
@@ -1289,24 +1347,41 @@ export default function GuestPhotoboothClient({
                 </div>
               </div>
             ) : (
-              <video
-                ref={videoRef}
-                playsInline
-                autoPlay
-                muted
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  maxWidth: 'none',
-                }}
-                className={`absolute inset-0 w-full h-full object-cover max-w-none ${
-                  facingMode === 'user' ? 'scale-x-[-1]' : ''
-                }`}
-              />
+              <>
+                <video
+                  ref={videoRef}
+                  playsInline
+                  autoPlay
+                  muted
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    objectPosition: facingMode === 'user' ? 'center 42%' : 'center center',
+                    transform: `${facingMode === 'user' ? 'scaleX(-1)' : ''} scale(${zoomLevel})`,
+                    transformOrigin: 'center 42%',
+                    maxWidth: 'none',
+                    transition: 'transform 0.25s ease-out',
+                  }}
+                  className="absolute inset-0 w-full h-full object-cover max-w-none"
+                />
+
+                {/* Zoom / Framing Switcher Button (1x / 1.25x) */}
+                {countdown === null && (
+                  <button
+                    type="button"
+                    onClick={toggleZoom}
+                    title={zoomLevel > 1.1 ? 'Ganti ke Sudut Lebar (1x)' : 'Ganti ke Mode Potret (1.25x)'}
+                    className="absolute bottom-3 right-3 z-20 px-2.5 py-1 rounded-full bg-[#1A1817]/75 backdrop-blur-md text-white border border-[#D4A373]/40 text-[11px] font-bold shadow-lg hover:bg-black/90 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <span className="text-[#D4A373] text-[10px]">{zoomLevel > 1.1 ? '🔍' : '📐'}</span>
+                    <span>{zoomLevel > 1.1 ? '1.25x' : '1x'}</span>
+                  </button>
+                )}
+              </>
             )}
 
             {/* Countdown Overlay Flash */}

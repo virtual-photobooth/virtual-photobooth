@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -92,6 +92,34 @@ function ClientDashboardInner() {
   const [isVideoExporting, setIsVideoExporting] = useState(false);
   const [videoExportProgress, setVideoExportProgress] = useState(0);
   const [videoExportError, setVideoExportError] = useState<string | null>(null);
+
+  // Responsive Column Distribution for True Pinterest Masonry
+  const [colCount, setColCount] = useState<number>(4);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      if (width < 640) {
+        setColCount(2);
+      } else if (width < 1024) {
+        setColCount(3);
+      } else {
+        setColCount(4);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const clientMasonryColumns = useMemo(() => {
+    const effectiveCols = Math.max(1, colCount);
+    const cols: any[][] = Array.from({ length: effectiveCols }, () => []);
+    photos.forEach((photo, idx) => {
+      cols[idx % effectiveCols].push(photo);
+    });
+    return cols;
+  }, [photos, colCount]);
 
   // Delete modal state
   const [deleteModal, setDeleteModal] = useState<{
@@ -941,20 +969,20 @@ function ClientDashboardInner() {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4">
                   {photos.slice(0, 4).map((photo) => (
                     <div
                       key={photo.id}
-                      className="group bg-white border border-[#E5E1DA] hover:border-[#111111] rounded-2xl overflow-hidden p-3 transition-all duration-200 flex flex-col justify-between shadow-2xs space-y-3"
+                      className="break-inside-avoid mb-4 group bg-white border border-[#E5E1DA] hover:border-[#111111] rounded-2xl overflow-hidden p-3 transition-all duration-200 flex flex-col justify-between shadow-2xs space-y-3"
                     >
                       <div
-                        className="aspect-[2/3] bg-[#F7F3EC] rounded-xl overflow-hidden relative cursor-pointer"
+                        className="w-full bg-[#F7F3EC] rounded-xl overflow-hidden relative cursor-pointer"
                         onClick={() => setSelectedPhoto(photo)}
                       >
                         <img
                           src={photo.publicUrl}
                           alt={photo.guest?.name || photo.guest_name || 'Candid'}
-                          className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
+                          className="w-full h-auto block object-contain group-hover:scale-103 transition-transform duration-300"
                         />
                         {photo.voiceUrl && (
                           <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/75 backdrop-blur-xs text-white text-[10px] font-mono flex items-center gap-1 shadow-sm">
@@ -1125,68 +1153,74 @@ function ClientDashboardInner() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-                {photos.map((photo) => (
-                  <div
-                    key={photo.id}
-                    className="group bg-white border border-[#E5E1DA] hover:border-[#111111] rounded-2xl overflow-hidden p-3 transition-all duration-200 flex flex-col justify-between shadow-2xs space-y-3"
-                  >
-                    <div
-                      className="aspect-[2/3] bg-[#F7F3EC] rounded-xl overflow-hidden relative cursor-pointer"
-                      onClick={() => setSelectedPhoto(photo)}
-                    >
-                      <img
-                        src={photo.publicUrl}
-                        alt={photo.guest?.name || photo.guest_name || 'Kenangan'}
-                        className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
-                      />
-                      {photo.voiceUrl && (
-                        <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-xs text-white text-[10px] font-mono flex items-center gap-1.5 shadow-sm">
-                          <Mic className="w-3 h-3 text-[#C5A880]" />
-                          <span>{formatTime(photo.voiceDuration || 1)}</span>
+              <div className={`grid gap-4 sm:gap-6 items-start ${
+                colCount === 2 ? 'grid-cols-2' : colCount === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+              }`}>
+                {clientMasonryColumns.map((colItems, colIdx) => (
+                  <div key={colIdx} className="flex flex-col gap-4 sm:gap-6 min-w-0">
+                    {colItems.map((photo) => (
+                      <div
+                        key={photo.id}
+                        className="group bg-white border border-[#E5E1DA] hover:border-[#111111] rounded-2xl overflow-hidden p-3 transition-all duration-200 flex flex-col justify-between shadow-2xs space-y-3"
+                      >
+                        <div
+                          className="w-full bg-[#F7F3EC] rounded-xl overflow-hidden relative cursor-pointer"
+                          onClick={() => setSelectedPhoto(photo)}
+                        >
+                          <img
+                            src={photo.publicUrl}
+                            alt={photo.guest?.name || photo.guest_name || 'Kenangan'}
+                            className="w-full h-auto block object-contain group-hover:scale-103 transition-transform duration-300"
+                          />
+                          {photo.voiceUrl && (
+                            <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-xs text-white text-[10px] font-mono flex items-center gap-1.5 shadow-sm">
+                              <Mic className="w-3 h-3 text-[#C5A880]" />
+                              <span>{formatTime(photo.voiceDuration || 1)}</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="flex items-center justify-between pt-1">
-                      <div className="min-w-0 pr-2">
-                        <h4 className="text-sm font-medium text-[#111111] truncate">
-                          {photo.guest?.name || photo.guest_name || 'Tamu Istimewa'}
-                        </h4>
-                        <span className="text-[10px] font-mono text-[#666666] block mt-0.5">
-                          {new Date(photo.created_at).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="min-w-0 pr-2">
+                            <h4 className="text-sm font-medium text-[#111111] truncate">
+                              {photo.guest?.name || photo.guest_name || 'Tamu Istimewa'}
+                            </h4>
+                            <span className="text-[10px] font-mono text-[#666666] block mt-0.5">
+                              {new Date(photo.created_at).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => handleDownloadSinglePhoto(photo)}
-                          title="Download Foto"
-                          className="p-2 rounded-full hover:bg-neutral-100 text-[#666666] hover:text-[#111111] transition-colors cursor-pointer"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() =>
-                            promptDelete(
-                              'photo',
-                              photo.id,
-                              photo.guest?.name || photo.guest_name || 'Foto'
-                            )
-                          }
-                          title="Hapus Foto"
-                          className="p-2 rounded-full hover:bg-rose-50 text-[#666666] hover:text-rose-600 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => handleDownloadSinglePhoto(photo)}
+                              title="Download Foto"
+                              className="p-2 rounded-full hover:bg-neutral-100 text-[#666666] hover:text-[#111111] transition-colors cursor-pointer"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                promptDelete(
+                                  'photo',
+                                  photo.id,
+                                  photo.guest?.name || photo.guest_name || 'Foto'
+                                )
+                              }
+                              title="Hapus Foto"
+                              className="p-2 rounded-full hover:bg-rose-50 text-[#666666] hover:text-rose-600 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 ))}
               </div>

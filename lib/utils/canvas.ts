@@ -279,7 +279,7 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
       renderX = targetX - (renderW - targetW) / 2;
     } else {
       renderH = targetW / imgRatio;
-      renderY = targetY - (renderH - targetH) / 2;
+      renderY = targetY - (renderH - targetH) * 0.42;
     }
 
     ctx.drawImage(img, renderX, renderY, renderW, renderH);

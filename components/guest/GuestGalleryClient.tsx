@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, use } from 'react';
+import { useState, useEffect, useRef, use, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
   Play,
@@ -66,6 +66,34 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioError, setAudioError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Responsive Column Distribution for True Pinterest Masonry
+  const [colCount, setColCount] = useState<number>(4);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      if (width < 640) {
+        setColCount(2);
+      } else if (width < 1024) {
+        setColCount(3);
+      } else {
+        setColCount(4);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const masonryColumns = useMemo(() => {
+    const effectiveCols = Math.max(1, colCount);
+    const cols: GalleryItem[][] = Array.from({ length: effectiveCols }, () => []);
+    items.forEach((item, index) => {
+      cols[index % effectiveCols].push(item);
+    });
+    return cols;
+  }, [items, colCount]);
 
   // Fetch Gallery Data
   useEffect(() => {
@@ -386,42 +414,48 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => setSelectedItem(item)}
-                className="group relative bg-white rounded-2xl overflow-hidden border border-[#E2D9CC] shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer flex flex-col transform hover:-translate-y-1"
-              >
-                {/* Photo Thumbnail - Completely Pristine Artwork Area */}
-                <div className="aspect-[2/3] w-full bg-[#F4EFE6] overflow-hidden relative">
-                  <img
-                    src={item.photoUrl}
-                    alt={item.guestName}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                  />
+          <div className={`grid gap-4 sm:gap-6 items-start ${
+            colCount === 2 ? 'grid-cols-2' : colCount === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+          }`}>
+            {masonryColumns.map((colItems, colIdx) => (
+              <div key={colIdx} className="flex flex-col gap-4 sm:gap-6 min-w-0">
+                {colItems.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => setSelectedItem(item)}
+                    className="group relative bg-white rounded-2xl overflow-hidden border border-[#E2D9CC] shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer flex flex-col transform hover:-translate-y-1"
+                  >
+                    {/* Photo Thumbnail - Natural Aspect Ratio (Pinterest Style) */}
+                    <div className="w-full bg-[#F4EFE6] overflow-hidden relative">
+                      <img
+                        src={item.photoUrl}
+                        alt={item.guestName}
+                        className="w-full h-auto block object-contain group-hover:scale-103 transition-transform duration-500"
+                        loading="lazy"
+                      />
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-3">
-                    <span className="text-white text-xs font-semibold flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-[#D4A373]" />
-                      <span>Lihat Kenangan</span>
-                    </span>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-3">
+                        <span className="text-white text-xs font-semibold flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5 text-[#D4A373]" />
+                          <span>Lihat Kenangan</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Guest Name & Voice Note Indicator Footer (Outside Artwork) */}
+                    <div className="p-3 bg-white border-t border-[#E2D9CC]/60 flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-[#2C2A29] truncate font-serif">
+                        {item.guestName}
+                      </span>
+                      {item.voiceUrl && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#F4EFE6] text-[#8C6D46] text-[10px] font-bold shrink-0 border border-[#E2D9CC]">
+                          <Mic className="w-3 h-3 text-[#8C6D46]" />
+                          <span>Voice Note</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-
-                {/* Guest Name & Voice Note Indicator Footer (Outside Artwork) */}
-                <div className="p-3 bg-white border-t border-[#E2D9CC]/60 flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-[#2C2A29] truncate font-serif">
-                    {item.guestName}
-                  </span>
-                  {item.voiceUrl && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#F4EFE6] text-[#8C6D46] text-[10px] font-bold shrink-0 border border-[#E2D9CC]">
-                      <Mic className="w-3 h-3 text-[#8C6D46]" />
-                      <span>Voice Note</span>
-                    </span>
-                  )}
-                </div>
+                ))}
               </div>
             ))}
           </div>
