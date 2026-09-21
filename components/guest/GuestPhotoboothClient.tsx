@@ -971,9 +971,10 @@ export default function GuestPhotoboothClient({
 
   const downloadCompositedPhoto = () => {
     if (!compositedImage) return;
+    const isPng = compositedImage.startsWith('data:image/png');
     const a = document.createElement('a');
     a.href = compositedImage;
-    a.download = `photobooth-${event?.slug || 'memory'}-${Date.now()}.jpg`;
+    a.download = `photobooth-${event?.slug || 'memory'}-${Date.now()}.${isPng ? 'png' : 'jpg'}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

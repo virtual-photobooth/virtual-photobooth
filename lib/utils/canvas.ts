@@ -43,9 +43,13 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D context not available');
 
-  // Fill elegant background (Crisp White for print & digital cards)
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+  // For frames, keep outer canvas transparent so die-cut/floating frames (tickets, polaroids)
+  // produce crisp, authentic transparent PNGs for sticker cutting and IG stories.
+  // For events without custom frames, fill crisp white paper base.
+  if (!frameImg) {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+  }
 
   // Load captured camera images
   const loadedImages: HTMLImageElement[] = await Promise.all(
@@ -80,7 +84,16 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
         const paddingY = Math.round(canvasHeight * 0.08);
         const gap = Math.round(canvasWidth * 0.02);
 
-        if (photoCount === 2) {
+        if (photoCount === 1) {
+          slots = [
+            {
+              x: paddingX,
+              y: paddingY,
+              w: canvasWidth - paddingX * 2,
+              h: canvasHeight - paddingY * 2,
+            },
+          ];
+        } else if (photoCount === 2) {
           const cellW = Math.floor((canvasWidth - paddingX * 2 - gap) / 2);
           const cellH = canvasHeight - paddingY * 2;
           slots = [
@@ -123,7 +136,19 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
         }
       } else {
         // Portrait fallback layouts (Standard 2:3 photobooth)
-        if (photoCount === 2) {
+        if (photoCount === 1) {
+          const paddingX = 100;
+          const paddingTop = 240;
+          const bottomPadding = 260;
+          slots = [
+            {
+              x: paddingX,
+              y: paddingTop,
+              w: canvasWidth - paddingX * 2,
+              h: canvasHeight - paddingTop - bottomPadding,
+            },
+          ];
+        } else if (photoCount === 2) {
           const paddingX = 120;
           const paddingTop = 260;
           const bottomPadding = 300;
@@ -293,7 +318,7 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     drawDefaultBranding(ctx, canvasWidth, canvasHeight, eventName, eventDate);
   }
 
-  const resultDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  const resultDataUrl = canvas.toDataURL('image/png');
 
   // Memory cleanup: release image resources to avoid OOM crashes on low-end Android devices
   try {
@@ -518,7 +543,8 @@ function detectCutoutWindows(
       const spanH = (c.maxGy - c.minGy + 1) / gridH;
 
       // Rule 1: A component that spans almost the entire width AND height is the outer canvas background
-      if (spanW > 0.75 && spanH > 0.75) {
+      // ONLY apply this if expectedCount > 1, because a 1-photo frame naturally takes up >75% of canvas!
+      if (expectedCount > 1 && spanW > 0.75 && spanH > 0.75) {
         return false;
       }
 

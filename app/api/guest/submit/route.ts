@@ -117,11 +117,14 @@ export async function POST(request: Request) {
     if (photoBase64) {
       try {
         const rawPhotoStr = String(photoBase64);
+        const isPng = rawPhotoStr.startsWith('data:image/png');
+        const ext = isPng ? 'png' : 'jpg';
+        const mimeType = isPng ? 'image/png' : 'image/jpeg';
         const base64Data = rawPhotoStr.includes(',') ? rawPhotoStr.split(',')[1] : rawPhotoStr;
         const buffer = Buffer.from(base64Data, 'base64');
-        const filename = `events/${eventId}/photos/photo_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+        const filename = `events/${eventId}/photos/photo_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
 
-        const uploadRes = await uploadToStorage(filename, buffer, 'image/jpeg');
+        const uploadRes = await uploadToStorage(filename, buffer, mimeType);
         if (uploadRes.success) {
           photoPath = filename;
         }
