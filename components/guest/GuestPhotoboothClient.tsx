@@ -1488,7 +1488,7 @@ export default function GuestPhotoboothClient({
       {/* STEP 3: RESULT VIEW & DOWNLOAD */}
       {step === 3 && compositedImage && (
         <div className="flex-1 flex flex-col justify-between items-center text-center animate-fade-in py-2 max-w-md mx-auto w-full">
-          <div className="space-y-1 pt-2">
+          <div className="space-y-1 pt-1">
             <h2 className="font-serif text-2xl font-bold text-[#2C2A29]">Your Memories</h2>
             <p className="text-xs text-[#78716C] italic font-serif">
               Foto Anda siap diunduh &amp; otomatis masuk galeri
@@ -1496,35 +1496,35 @@ export default function GuestPhotoboothClient({
           </div>
 
           {/* Final Composited Photo Result */}
-          <div className="w-full max-w-xs sm:max-w-md rounded-3xl overflow-hidden relative shadow-2xl border-4 border-white my-2 bg-transparent flex items-center justify-center">
+          <div className="w-full max-w-xs sm:max-w-sm rounded-3xl overflow-hidden relative shadow-xl border-4 border-white my-2 bg-transparent flex items-center justify-center">
             <img
               src={compositedImage}
               alt="Final Photobooth Memories"
-              className="w-full h-auto max-h-[46vh] object-contain rounded-2xl"
+              className="w-full h-auto max-h-[36vh] sm:max-h-[44vh] object-contain rounded-2xl"
             />
           </div>
 
           {/* Auto-Upload Status Indicator */}
           <div className="w-full flex justify-center px-4 mb-2">
             {autoUploadStatus === 'uploading' && (
-              <div className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-[#F4EFE6] border border-[#E2D9CC] rounded-full text-[11px] font-medium text-[#78716C] animate-pulse">
+              <div className="flex items-center justify-center gap-1.5 px-3.5 py-1 bg-[#F4EFE6] border border-[#E2D9CC] rounded-full text-[11px] font-medium text-[#78716C] animate-pulse">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-[#8C6D46]" />
-                <span>Menyimpan ke galeri acara...</span>
+                <span>Menyimpan otomatis ke galeri acara...</span>
               </div>
             )}
             {autoUploadStatus === 'success' && (
-              <div className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] font-semibold text-emerald-800 shadow-xs animate-fade-in">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <div className="flex items-center justify-center gap-1.5 px-3.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] font-semibold text-emerald-800 shadow-xs animate-fade-in">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span>Foto otomatis tersimpan di galeri!</span>
               </div>
             )}
             {autoUploadStatus === 'error' && (
-              <div className="flex items-center justify-center gap-2 px-3.5 py-1.5 bg-rose-50 border border-rose-200 rounded-full text-[11px] font-medium text-rose-700">
-                <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+              <div className="flex items-center justify-center gap-2 px-3.5 py-1 bg-rose-50 border border-rose-200 rounded-full text-[11px] font-medium text-rose-700">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                 <span>Gagal simpan otomatis: {autoUploadError || 'Koneksi terputus'}</span>
                 <button
                   onClick={() => compositedImage && triggerAutoUpload(compositedImage, selectedFrame?.id)}
-                  className="underline font-bold hover:text-rose-900 cursor-pointer"
+                  className="underline font-bold hover:text-rose-900 cursor-pointer ml-1"
                 >
                   Coba Lagi
                 </button>
@@ -1534,21 +1534,82 @@ export default function GuestPhotoboothClient({
 
           {/* Frame Switcher for Multi-Frame Events */}
           {frames.length > 1 && (
-            <ResultFrameSwitcher
-              frames={frames}
-              selectedFrame={selectedFrame}
-              currentPhotoCount={capturedSnapshots.length || capturedSnapshotsRef.current.length}
-              switchingFrameId={switchingFrameId}
-              onSelectFrame={handleSwitchResultFrame}
-            />
+            <div className="w-full mb-2">
+              <ResultFrameSwitcher
+                frames={frames}
+                selectedFrame={selectedFrame}
+                currentPhotoCount={capturedSnapshots.length || capturedSnapshotsRef.current.length}
+                switchingFrameId={switchingFrameId}
+                onSelectFrame={handleSwitchResultFrame}
+              />
+            </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="w-full space-y-2.5 pt-1">
+          {/* Prominent Voice / Audio Guestbook Highlight Card (Above Download) */}
+          <div className="w-full pt-1 mb-2.5">
+            <button
+              onClick={() => setStep(4)}
+              className="w-full p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-[#FFFDF9] via-[#FAF6EE] to-[#F5EFE4] border-2 border-[#D4A373]/60 hover:border-[#8C6D46] transition-all flex items-center justify-between gap-3 text-left group cursor-pointer shadow-md hover:shadow-lg relative overflow-hidden active:scale-[0.99]"
+            >
+              {/* Decorative warm glow backdrop */}
+              <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-[#D4A373]/10 rounded-full blur-xl pointer-events-none" />
+
+              <div className="flex items-center gap-3 relative z-10">
+                {/* Glowing Mic Icon Badge */}
+                <div className="relative shrink-0">
+                  <div className="w-11 h-11 rounded-2xl bg-[#2C2A29] text-[#D4A373] flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                    {voiceBlob ? (
+                      <Check className="w-5 h-5 text-emerald-400" />
+                    ) : (
+                      <Mic className="w-5 h-5 text-[#E5B887]" />
+                    )}
+                  </div>
+                  {!voiceBlob && event?.is_voice_enabled && (
+                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D4A373] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#8C6D46]"></span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Text Content */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold tracking-wider uppercase bg-[#8C6D46]/10 text-[#8C6D46]">
+                      {voiceBlob ? '✓ Suara Tersimpan' : event?.is_voice_enabled ? '🎙️ Audio Guestbook' : '💌 Buku Tamu'}
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm font-bold text-[#2C2A29] leading-tight">
+                    {voiceBlob
+                      ? 'Pesan Suara Berhasil Direkam!'
+                      : event?.is_voice_enabled
+                      ? 'Tinggalkan Pesan Suara & Ucapan'
+                      : 'Tulis Nama & Pesan Ucapan'}
+                  </p>
+                  <p className="text-[11px] text-[#78716C] leading-normal mt-0.5">
+                    {voiceBlob
+                      ? 'Ketuk untuk mendengarkan kembali atau mengubah'
+                      : event?.is_voice_enabled
+                      ? 'Rekam suara doa & selamat hangat Anda untuk pengantin'
+                      : 'Kirimkan doa dan ucapan manis ke galeri acara'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Action Button Pill */}
+              <div className="flex items-center gap-1 shrink-0 px-3 py-2 rounded-xl bg-[#2C2A29] text-white text-[11px] font-semibold shadow-xs group-hover:bg-[#1A1817] transition-all">
+                <span>{voiceBlob ? 'Ubah' : event?.is_voice_enabled ? 'Rekam' : 'Tulis'}</span>
+                <ArrowRight className="w-3.5 h-3.5 text-[#D4A373] group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
+          </div>
+
+          {/* Action Buttons: Download & Gallery */}
+          <div className="w-full space-y-2.5">
             {/* Primary Action: Download Photo */}
             <button
               onClick={downloadCompositedPhoto}
-              className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-semibold text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-semibold text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#423E3C]"
             >
               <Download className="w-4 h-4 text-[#D4A373]" />
               <span>DOWNLOAD FOTO</span>
@@ -1572,49 +1633,26 @@ export default function GuestPhotoboothClient({
                 <span>FOTO ULANG</span>
               </button>
             </div>
-
-            {/* Optional Guestbook / Voice CTA Card */}
-            <div className="w-full pt-1">
-              <button
-                onClick={() => setStep(4)}
-                className="w-full p-3 rounded-2xl bg-[#F9F6F0] hover:bg-[#F4EFE6] border border-[#E2D9CC] hover:border-[#8C6D46] transition-all flex items-center justify-between gap-3 text-left group cursor-pointer shadow-xs"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#8C6D46] shadow-xs border border-[#E2D9CC]">
-                    <Heart className="w-4 h-4 fill-current text-[#D4A373]" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-[#2C2A29]">
-                      Tulis Nama &amp; Pesan Ucapan
-                    </p>
-                    <p className="text-[10.5px] text-[#78716C]">
-                      Opsional · Titip ucapan {event.is_voice_enabled ? '& rekam suara ' : ''}ke buku tamu
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center text-xs font-semibold text-[#8C6D46] group-hover:translate-x-0.5 transition-transform shrink-0">
-                  <span>Lanjut</span>
-                  <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
-                </div>
-              </button>
-            </div>
           </div>
         </div>
       )}
 
       {/* STEP 4: GUEST DETAILS FORM (OPTIONAL) */}
       {step === 4 && (
-        <div className="flex-1 flex flex-col justify-between items-center text-center animate-fade-in py-4 max-w-sm mx-auto w-full">
-          <div className="space-y-2 pt-4">
+        <div className="flex-1 flex flex-col justify-between items-center text-center animate-fade-in py-3 max-w-sm mx-auto w-full">
+          <div className="space-y-1.5 pt-2">
+            <span className="px-3 py-1 rounded-full text-[10.5px] font-bold tracking-widest uppercase bg-[#8C6D46]/10 text-[#8C6D46] inline-block">
+              {event?.is_voice_enabled ? 'Langkah 1: Nama & Ucapan' : 'Buku Tamu Digital'}
+            </span>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#2C2A29]">
-              Guest Guestbook
+              {event?.is_voice_enabled ? 'Buku Tamu & Suara' : 'Buku Tamu Kenangan'}
             </h2>
-            <p className="text-xs text-[#78716C] max-w-xs leading-relaxed">
-              <span className="font-semibold text-[#8C6D46]">Opsional</span> — Tuliskan nama dan ucapan Anda untuk melengkapi album kenangan acara
+            <p className="text-xs text-[#78716C] max-w-xs leading-relaxed mx-auto">
+              <span className="font-semibold text-[#8C6D46]">Opsional</span> — Tuliskan nama Anda {event?.is_voice_enabled ? 'sebelum merekam pesan suara untuk pengantin' : 'untuk melengkapi album kenangan acara'}
             </p>
           </div>
 
-          <div className="w-full space-y-4 my-6 bg-white p-6 rounded-3xl border border-[#E2D9CC] shadow-xl text-left">
+          <div className="w-full space-y-4 my-4 bg-white p-5 sm:p-6 rounded-3xl border border-[#E2D9CC] shadow-xl text-left">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-[#8C6D46] mb-1.5">
                 Nama Anda (Opsional)
@@ -1623,8 +1661,8 @@ export default function GuestPhotoboothClient({
                 type="text"
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Contoh: Ibu Rina &amp; Keluarga"
-                className="w-full bg-[#F9F6F0] border border-[#E2D9CC] focus:border-[#8C6D46] rounded-xl p-3.5 text-xs text-[#2C2A29] font-medium focus:outline-none"
+                placeholder="Contoh: Ibu Rina & Keluarga"
+                className="w-full bg-[#F9F6F0] border border-[#E2D9CC] focus:border-[#8C6D46] rounded-xl p-3 text-xs text-[#2C2A29] font-medium focus:outline-none"
               />
             </div>
 
@@ -1637,7 +1675,7 @@ export default function GuestPhotoboothClient({
                 value={guestNote}
                 onChange={(e) => setGuestNote(e.target.value)}
                 placeholder="Tuliskan ucapan selamat dan doa untuk pengantin..."
-                className="w-full bg-[#F9F6F0] border border-[#E2D9CC] focus:border-[#8C6D46] rounded-xl p-3.5 text-xs text-[#2C2A29] font-medium focus:outline-none resize-none"
+                className="w-full bg-[#F9F6F0] border border-[#E2D9CC] focus:border-[#8C6D46] rounded-xl p-3 text-xs text-[#2C2A29] font-medium focus:outline-none resize-none"
               />
             </div>
           </div>
@@ -1651,24 +1689,26 @@ export default function GuestPhotoboothClient({
                   handleSubmitGuestbook();
                 }
               }}
-              className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-medium text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-semibold text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-[#423E3C]"
             >
-              <span>{event?.is_voice_enabled ? 'LANJUT REKAM SUARA' : 'SIMPAN KE GUESTBOOK'}</span>
+              <span>{event?.is_voice_enabled ? 'LANJUT REKAM SUARA 🎙️' : 'SIMPAN KE GUESTBOOK'}</span>
               <ArrowRight className="w-4 h-4 text-[#D4A373]" />
             </button>
 
-            <button
-              onClick={() => {
-                if (guestName.trim() || guestNote.trim()) {
-                  handleSubmitGuestbook();
-                } else {
-                  setStep(6);
-                }
-              }}
-              className="w-full py-3 px-6 rounded-full bg-white hover:bg-[#F4EFE6] text-[#78716C] hover:text-[#2C2A29] font-medium text-xs tracking-wider uppercase border border-[#E2D9CC] transition-all cursor-pointer shadow-xs"
-            >
-              <span>LEWATI &amp; SELESAI</span>
-            </button>
+            {event?.is_voice_enabled && (
+              <button
+                onClick={() => {
+                  if (guestName.trim() || guestNote.trim()) {
+                    handleSubmitGuestbook();
+                  } else {
+                    setStep(6);
+                  }
+                }}
+                className="w-full py-3 px-6 rounded-full bg-white hover:bg-[#F4EFE6] text-[#78716C] hover:text-[#2C2A29] font-medium text-xs tracking-wider uppercase border border-[#E2D9CC] transition-all cursor-pointer shadow-xs"
+              >
+                <span>SIMPAN UCAPAN TEKS SAJA (TANPA SUARA)</span>
+              </button>
+            )}
 
             <button
               onClick={() => setStep(3)}
@@ -1683,19 +1723,22 @@ export default function GuestPhotoboothClient({
 
       {/* STEP 5: VOICE NOTE RECORDING (OPTIONAL) */}
       {step === 5 && (
-        <div className="flex-1 flex flex-col justify-between items-center text-center animate-fade-in py-4 max-w-sm mx-auto w-full">
-          <div className="space-y-2 pt-4">
+        <div className="flex-1 flex flex-col justify-between items-center text-center animate-fade-in py-3 max-w-sm mx-auto w-full">
+          <div className="space-y-1.5 pt-2">
+            <span className="px-3 py-1 rounded-full text-[10.5px] font-bold tracking-widest uppercase bg-[#8C6D46]/10 text-[#8C6D46] inline-block">
+              Langkah 2: Rekam Suara
+            </span>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#2C2A29]">
-              Voice Guestbook
+              Audio Guestbook
             </h2>
-            <p className="text-xs text-[#78716C] max-w-xs leading-relaxed">
+            <p className="text-xs text-[#78716C] max-w-xs leading-relaxed mx-auto">
               <span className="font-semibold text-[#8C6D46]">Opsional</span> — Tinggalkan pesan suara langsung ucapan selamat dan doa kesan Anda (Maksimal 60 Detik)
             </p>
           </div>
 
-          <div className="w-full my-6 bg-white p-8 rounded-3xl border border-[#E2D9CC] shadow-xl flex flex-col items-center gap-6">
+          <div className="w-full my-4 bg-white p-6 sm:p-8 rounded-3xl border border-[#E2D9CC] shadow-xl flex flex-col items-center gap-5">
             {/* Audio Timer Badge */}
-            <div className="text-3xl font-mono font-bold text-[#2C2A29] bg-[#F4EFE6] px-6 py-2 rounded-2xl border border-[#E2D9CC]">
+            <div className="text-3xl font-mono font-bold text-[#2C2A29] bg-[#F4EFE6] px-6 py-2 rounded-2xl border border-[#E2D9CC] shadow-inner tracking-widest">
               00:{recordingTime < 10 ? `0${recordingTime}` : recordingTime}
             </div>
 
@@ -1706,18 +1749,18 @@ export default function GuestPhotoboothClient({
                 className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all cursor-pointer active:scale-90 ${
                   recordingVoice
                     ? 'bg-rose-500 text-white animate-pulse ring-8 ring-rose-200'
-                    : 'bg-[#8C6D46] hover:bg-[#735735] text-white'
+                    : 'bg-[#2C2A29] hover:bg-[#1A1817] text-[#D4A373] ring-4 ring-[#D4A373]/25 hover:scale-105'
                 }`}
               >
-                {recordingVoice ? <Square className="w-8 h-8 fill-current" /> : <Mic className="w-10 h-10" />}
+                {recordingVoice ? <Square className="w-8 h-8 fill-current text-white" /> : <Mic className="w-10 h-10" />}
               </button>
             ) : (
               <div className="flex items-center gap-4 w-full justify-center">
                 <button
                   onClick={togglePlayVoice}
-                  className="w-16 h-16 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white flex items-center justify-center shadow-xl cursor-pointer"
+                  className="w-16 h-16 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white flex items-center justify-center shadow-xl cursor-pointer active:scale-95"
                 >
-                  {isPlayingAudio ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-1" />}
+                  {isPlayingAudio ? <Pause className="w-6 h-6 fill-current text-[#D4A373]" /> : <Play className="w-6 h-6 fill-current ml-1 text-[#D4A373]" />}
                 </button>
 
                 <button
@@ -1726,7 +1769,7 @@ export default function GuestPhotoboothClient({
                     setVoiceAudioUrl(null);
                     setRecordingTime(0);
                   }}
-                  className="px-4 py-2.5 rounded-full bg-[#F4EFE6] hover:bg-[#E5DFD5] text-[#2C2A29] text-xs font-semibold border border-[#E2D9CC] flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2.5 rounded-full bg-[#F4EFE6] hover:bg-[#E5DFD5] text-[#2C2A29] text-xs font-semibold border border-[#E2D9CC] flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Rekam Ulang</span>
@@ -1739,7 +1782,7 @@ export default function GuestPhotoboothClient({
                 ? 'Sedang Merekam Suara...'
                 : voiceBlob
                 ? 'Pesan Suara Berhasil Direkam!'
-                : 'Klik Tombol Mikrofon Untuk Mulai Merekam'}
+                : 'Ketuk Tombol Mikrofon Untuk Mulai Merekam'}
             </p>
           </div>
 
@@ -1747,7 +1790,7 @@ export default function GuestPhotoboothClient({
             <button
               onClick={handleSubmitGuestbook}
               disabled={uploadingVoice}
-              className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-semibold text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+              className="w-full py-3.5 px-6 rounded-full bg-[#2C2A29] hover:bg-[#1A1817] text-white font-semibold text-xs tracking-widest uppercase shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 border border-[#423E3C]"
             >
               {uploadingVoice ? (
                 <>
