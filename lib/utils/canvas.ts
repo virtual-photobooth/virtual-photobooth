@@ -43,8 +43,8 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D context not available');
 
-  // Fill elegant background (Warm Cream / Off-white)
-  ctx.fillStyle = '#F8F5F0';
+  // Fill elegant background (Crisp White for print & digital cards)
+  ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
   // Load captured camera images
@@ -377,7 +377,12 @@ function drawDefaultBranding(
 /**
  * 2D Connected-Component (Blob) detection of transparent cutout windows.
  * Accurately detects 2-photo (vertical/horizontal) and 4-photo (2x2 grid or 1x4 strip)
- * windows regardless of overlapping decorations, orientation, or typography.
+/**
+ * 2D Connected-Component (Blob) detection of transparent cutout windows.
+ * Universally handles all frame types:
+ * 1. Full-bleed frames (solid borders with inner cutouts)
+ * 2. Die-cut & floating frames (ripped tickets, polaroids, shaped borders with outer transparency)
+ * 3. Minimalist overlay frames (graceful fallback to balanced proportional grids)
  */
 function detectCutoutWindows(
   frameImg: HTMLImageElement,
@@ -416,10 +421,15 @@ function detectCutoutWindows(
       minGy: number;
       maxGy: number;
       count: number;
+      perimeterTouches: number;
+      touchesLeft: boolean;
+      touchesRight: boolean;
+      touchesTop: boolean;
+      touchesBottom: boolean;
     }> = [];
 
-    // Minimum area threshold: at least 1.5% of total grid for 4 photos, 2% for 2 photos
-    const minThreshold = (gridW * gridH) * (expectedCount > 2 ? 0.015 : 0.02);
+    // Minimum area threshold: at least 1.2% of total grid for 4 photos, 1.8% for 2 photos
+    const minThreshold = (gridW * gridH) * (expectedCount > 2 ? 0.012 : 0.018);
 
     for (let gy = 0; gy < gridH; gy++) {
       for (let gx = 0; gx < gridW; gx++) {
@@ -430,6 +440,12 @@ function detectCutoutWindows(
           let minGy = gy;
           let maxGy = gy;
           let count = 0;
+          let perimeterTouches = 0;
+          let touchesLeft = false;
+          let touchesRight = false;
+          let touchesTop = false;
+          let touchesBottom = false;
+
           const queue: number[] = [gx, gy];
           visited[idx] = 1;
           let head = 0;
@@ -438,10 +454,21 @@ function detectCutoutWindows(
             const cx = queue[head++];
             const cy = queue[head++];
             count++;
+
             if (cx < minGx) minGx = cx;
             if (cx > maxGx) maxGx = cx;
             if (cy < minGy) minGy = cy;
             if (cy > maxGy) maxGy = cy;
+
+            // Check if pixel is on the outer image perimeter
+            const onPerimeter = (cx === 0 || cx === gridW - 1 || cy === 0 || cy === gridH - 1);
+            if (onPerimeter) {
+              perimeterTouches++;
+              if (cx === 0) touchesLeft = true;
+              if (cx === gridW - 1) touchesRight = true;
+              if (cy === 0) touchesTop = true;
+              if (cy === gridH - 1) touchesBottom = true;
+            }
 
             const neighbors: Array<[number, number]> = [
               [cx + 1, cy],
@@ -461,7 +488,18 @@ function detectCutoutWindows(
           }
 
           if (count >= minThreshold) {
-            rawComponents.push({ minGx, maxGx, minGy, maxGy, count });
+            rawComponents.push({
+              minGx,
+              maxGx,
+              minGy,
+              maxGy,
+              count,
+              perimeterTouches,
+              touchesLeft,
+              touchesRight,
+              touchesTop,
+              touchesBottom,
+            });
           }
         }
       }
@@ -469,13 +507,59 @@ function detectCutoutWindows(
 
     if (rawComponents.length === 0) return null;
 
-    let candidates = rawComponents;
-    // If more components than expected (e.g. tiny decorative cuts), take largest by area
+    // Filter out Outer Canvas Backgrounds:
+    // In die-cut frames (ripped tickets, polaroids, floating strips), the space
+    // OUTSIDE the frame touches multiple outer borders or covers the canvas span.
+    // Real photo cutout slots are enclosed within the frame artwork.
+    const totalPerimeterPixels = 2 * (gridW + gridH - 2);
+
+    const validPhotoSlots = rawComponents.filter((c) => {
+      const spanW = (c.maxGx - c.minGx + 1) / gridW;
+      const spanH = (c.maxGy - c.minGy + 1) / gridH;
+
+      // Rule 1: A component that spans almost the entire width AND height is the outer canvas background
+      if (spanW > 0.75 && spanH > 0.75) {
+        return false;
+      }
+
+      // Rule 2: A component that touches 3 or 4 outer image borders is surrounding the frame
+      const borderSideCount =
+        (c.touchesLeft ? 1 : 0) +
+        (c.touchesRight ? 1 : 0) +
+        (c.touchesTop ? 1 : 0) +
+        (c.touchesBottom ? 1 : 0);
+
+      if (borderSideCount >= 3) {
+        return false;
+      }
+
+      // Rule 3: A component touching opposing borders (both left AND right, or both top AND bottom) with wide perimeter span
+      if ((c.touchesLeft && c.touchesRight) || (c.touchesTop && c.touchesBottom)) {
+        if (c.perimeterTouches > totalPerimeterPixels * 0.08) {
+          return false;
+        }
+      }
+
+      // Rule 4: Reject extreme thin slivers (accidental transparent cut lines or decorative slits)
+      const compRatio = (c.maxGx - c.minGx + 1) / (c.maxGy - c.minGy + 1);
+      if (compRatio > 7.0 || compRatio < 0.12) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // If candidate slots match expected count exactly, use them
+    let candidates = validPhotoSlots;
+
+    // If more valid slots found than expected (e.g. extra decorative holes), pick largest by area
     if (candidates.length > expectedCount) {
       candidates.sort((a, b) => b.count - a.count);
       candidates = candidates.slice(0, expectedCount);
     }
 
+    // If we didn't find the expected number of enclosed slots (e.g. minimalist frame without cutouts),
+    // return null to gracefully trigger the calibrated fallback grid.
     if (candidates.length !== expectedCount) {
       return null;
     }
