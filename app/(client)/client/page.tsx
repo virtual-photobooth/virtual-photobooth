@@ -26,6 +26,7 @@ import {
   Loader2,
   LogOut,
   Sparkles,
+  Printer,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { createClient } from '@/lib/supabase/client';
@@ -35,8 +36,10 @@ import {
   downloadImageDirectly,
   downloadBlob,
 } from '@/lib/utils/media-export';
+import VendorPrintStation from '@/components/client/VendorPrintStation';
+import PrintLayoutModal, { PrintJobData } from '@/components/print/PrintLayoutModal';
 
-type TabType = 'overview' | 'photos' | 'guests';
+type TabType = 'overview' | 'photos' | 'guests' | 'print';
 
 function ClientDashboardInner() {
   const searchParams = useSearchParams();
@@ -45,29 +48,116 @@ function ClientDashboardInner() {
 
   const urlTab = searchParams.get('tab') as TabType | null;
   const [activeTab, setActiveTab] = useState<TabType>(
-    urlTab && ['overview', 'photos', 'guests'].includes(urlTab)
+    urlTab && ['overview', 'photos', 'guests', 'print'].includes(urlTab)
       ? urlTab
       : 'overview'
   );
 
   // Sync state if URL changes
   useEffect(() => {
-    if (urlTab && ['overview', 'photos', 'guests'].includes(urlTab)) {
+    if (urlTab && ['overview', 'photos', 'guests', 'print'].includes(urlTab)) {
       setActiveTab(urlTab);
     }
   }, [urlTab]);
 
-  const switchTab = (tab: TabType) => {
+  const scrollToSection = (sectionId: string, tab: TabType) => {
     setActiveTab(tab);
     window.history.replaceState(null, '', `/client?tab=${tab}`);
+    const el = document.getElementById(sectionId);
+    if (el) {
+      const navOffset = 90;
+      const elementPosition = el.getBoundingClientRect().top + window.pageYOffset;
+      window.scrollTo({
+        top: Math.max(0, elementPosition - navOffset),
+        behavior: 'smooth',
+      });
+    }
   };
+
+  const switchTab = (tab: TabType) => {
+    const targetId =
+      tab === 'photos'
+        ? 'section-photos'
+        : tab === 'guests'
+        ? 'section-guests'
+        : tab === 'print'
+        ? 'section-print'
+        : 'section-overview';
+    scrollToSection(targetId, tab);
+  };
+
+  // Scroll to section on initial URL tab parameter
+  useEffect(() => {
+    if (!urlTab || urlTab === 'overview') return;
+    const timer = setTimeout(() => {
+      const targetId =
+        urlTab === 'photos'
+          ? 'section-photos'
+          : urlTab === 'guests'
+          ? 'section-guests'
+          : urlTab === 'print'
+          ? 'section-print'
+          : 'section-overview';
+      const el = document.getElementById(targetId);
+      if (el) {
+        const navOffset = 90;
+        const elementPosition = el.getBoundingClientRect().top + window.pageYOffset;
+        window.scrollTo({
+          top: Math.max(0, elementPosition - navOffset),
+          behavior: 'smooth',
+        });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [urlTab]);
+
+  // Scroll spy to highlight active tab in navbar while scrolling
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections: { id: string; tab: TabType }[] = [
+        { id: 'section-overview', tab: 'overview' },
+        { id: 'section-photos', tab: 'photos' },
+        { id: 'section-guests', tab: 'guests' },
+        { id: 'section-print', tab: 'print' },
+      ];
+
+      const scrollPosition = window.scrollY + 160;
+
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const el = document.getElementById(sections[i].id);
+        if (el && el.offsetTop <= scrollPosition) {
+          setActiveTab(sections[i].tab);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Data states
   const [events, setEvents] = useState<Event[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [photos, setPhotos] = useState<any[]>([]);
   const [voices, setVoices] = useState<any[]>([]);
+  const [printRequests, setPrintRequests] = useState<any[]>([]);
+  const [printPendingCount, setPrintPendingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+
+  // Direct print modal state for gallery photos
+  const [directPrintJob, setDirectPrintJob] = useState<PrintJobData | null>(null);
+  const [isDirectPrintOpen, setIsDirectPrintOpen] = useState<boolean>(false);
+
+  const openDirectPrint = (photo: any) => {
+    setDirectPrintJob({
+      photoUrl: photo.publicUrl,
+      guestName: photo.guest?.name || photo.guest_name || 'Kenangan Acara',
+      layoutType: 'strip_2x6',
+      copies: 1,
+    });
+    setIsDirectPrintOpen(true);
+  };
 
   // Search in guests
   const [guestSearch, setGuestSearch] = useState('');
@@ -173,6 +263,8 @@ function ClientDashboardInner() {
         setGuests(data.guests || []);
         setPhotos(data.photos || []);
         setVoices(data.voiceMessages || []);
+        setPrintRequests(data.printRequests || []);
+        setPrintPendingCount(data.counts?.printPending || 0);
       }
     } catch (err) {
       console.error('Error fetching client overview:', err);
@@ -565,11 +657,14 @@ function ClientDashboardInner() {
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 h-18 sm:h-20 flex items-center justify-between">
           {/* Brand Logo: Monogram Crest + Typography */}
           <Link href="/client" className="flex items-center gap-3 group shrink-0">
-            <img
-              src="/brand/crest.png"
-              alt="sebuah.kenang Crest"
-              className="h-8 w-auto object-contain transition-opacity group-hover:opacity-85"
-            />
+            <div className="w-8 h-8 flex items-center justify-center shrink-0 overflow-hidden">
+              <img
+                src="/brand/crest.png"
+                alt="sebuah.kenang Crest"
+                className="w-full h-full object-contain transition-opacity group-hover:opacity-85"
+                style={{ maxHeight: '32px', maxWidth: '32px' }}
+              />
+            </div>
             <div className="flex flex-col">
               <span className="font-serif text-lg sm:text-xl tracking-tight text-[#111111] font-normal leading-none">
                 sebuah.kenang
@@ -611,6 +706,22 @@ function ClientDashboardInner() {
               }`}
             >
               Tamu
+            </button>
+            <button
+              onClick={() => switchTab('print')}
+              className={`transition-all cursor-pointer py-1 flex items-center gap-1.5 ${
+                activeTab === 'print'
+                  ? 'text-[#111111] font-medium border-b-2 border-[#111111]'
+                  : 'text-[#666666] hover:text-[#111111]'
+              }`}
+            >
+              <Printer className="w-3.5 h-3.5 text-[#D4A373]" />
+              <span>Antrian Cetak</span>
+              {printPendingCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500 text-black animate-pulse">
+                  {printPendingCount}
+                </span>
+              )}
             </button>
           </nav>
 
@@ -671,17 +782,35 @@ function ClientDashboardInner() {
           >
             Tamu ({guests.length})
           </button>
+          <button
+            onClick={() => switchTab('print')}
+            className={`transition-all py-1 flex items-center gap-1 ${
+              activeTab === 'print'
+                ? 'text-[#111111] font-medium border-b-2 border-[#111111]'
+                : 'text-[#666666]'
+            }`}
+          >
+            <Printer className="w-3 h-3 text-[#D4A373]" />
+            <span>Cetak</span>
+            {printPendingCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500 text-black">
+                {printPendingCount}
+              </span>
+            )}
+          </button>
         </div>
       </header>
 
       {/* =========================================================================
           MAIN CONTAINER
           ========================================================================= */}
-      <main className="max-w-[1240px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-6 sm:space-y-8 flex-1">
+      <main className="max-w-[1240px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-12 sm:space-y-16 flex-1">
         {/* =========================================================================
-            1. HERO EVENT BANNER WITH EDITORIAL RIGHT CARD
+            SECTION 1: OVERVIEW & RINGKASAN
             ========================================================================= */}
-        <section className="bg-white border border-[#E5E1DA] rounded-2xl overflow-hidden shadow-2xs flex flex-col lg:flex-row items-stretch">
+        <section id="section-overview" className="scroll-mt-24 space-y-6 sm:space-y-8">
+          {/* 1. HERO EVENT BANNER WITH EDITORIAL RIGHT CARD */}
+          <div className="bg-white border border-[#E5E1DA] rounded-2xl overflow-hidden shadow-2xs flex flex-col lg:flex-row items-stretch">
           {/* Left: Event Details */}
           <div className="flex-1 p-6 sm:p-8 lg:p-10 flex flex-col justify-center space-y-3 sm:space-y-4">
             <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-[#666666] block">
@@ -766,12 +895,12 @@ function ClientDashboardInner() {
               )}
             </div>
           </div>
-        </section>
+        </div>
 
         {/* =========================================================================
             2. EVENT ACCESS BAR (LINK AKSES TAMU)
             ========================================================================= */}
-        <section className="bg-white border border-[#E5E1DA] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 shadow-2xs">
+        <div className="bg-white border border-[#E5E1DA] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 shadow-2xs">
           <span className="text-[10px] font-mono tracking-[0.2em] uppercase text-[#666666] shrink-0">
             LINK AKSES TAMU
           </span>
@@ -813,12 +942,12 @@ function ClientDashboardInner() {
               </a>
             )}
           </div>
-        </section>
+        </div>
 
         {/* =========================================================================
             3. INFORMATION BLOCKS (4 STATS CARDS)
             ========================================================================= */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           {/* Block 1: Total Tamu */}
           <div
             onClick={() => switchTab('guests')}
@@ -894,12 +1023,12 @@ function ClientDashboardInner() {
               </strong>
             </p>
           </div>
-        </section>
+        </div>
 
         {/* =========================================================================
             4. RETENTION NOTIFICATION BAR (AUTO DELETE NOTICE)
             ========================================================================= */}
-        <section className="bg-white border border-[#E5E1DA] rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sm:gap-6 shadow-2xs">
+        <div className="bg-white border border-[#E5E1DA] rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sm:gap-6 shadow-2xs">
           <div className="flex items-start gap-3.5">
             <div className="w-10 h-10 rounded-full bg-[#F7F3EC] text-[#A27A49] flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
               <Clock className="w-5 h-5" />
@@ -926,13 +1055,10 @@ function ClientDashboardInner() {
             <Download className="w-4 h-4" />
             <span>Unduh Semua (.ZIP)</span>
           </button>
-        </section>
+        </div>
 
-        {/* =========================================================================
-            5. TAB CONTENT
-            ========================================================================= */}
-        {activeTab === 'overview' && (
-          <div className="space-y-8 sm:space-y-10">
+        {/* Kenangan Terbaru & Panduan */}
+        <div className="space-y-8 sm:space-y-10">
             {/* Foto Terkini / Kenangan Terbaru */}
             <div className="space-y-4">
               <div className="flex items-end justify-between">
@@ -1010,6 +1136,13 @@ function ClientDashboardInner() {
 
                         <div className="flex items-center gap-1 shrink-0">
                           <button
+                            onClick={() => openDirectPrint(photo)}
+                            title="Cetak Foto (Print)"
+                            className="p-1.5 text-[#666666] hover:text-[#111111] transition-colors cursor-pointer"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => handleDownloadSinglePhoto(photo)}
                             title="Download Foto"
                             className="p-1.5 text-[#666666] hover:text-[#111111] transition-colors cursor-pointer"
@@ -1038,7 +1171,7 @@ function ClientDashboardInner() {
             </div>
 
             {/* Panduan Singkat Penyelenggara (Cara Kerja Virtual Photobooth) */}
-            <section className="bg-white border border-[#E5E1DA] rounded-2xl overflow-hidden flex flex-col lg:flex-row items-stretch shadow-2xs">
+            <div className="bg-white border border-[#E5E1DA] rounded-2xl overflow-hidden flex flex-col lg:flex-row items-stretch shadow-2xs">
               {/* Left Column: 3 Editorial Steps */}
               <div className="flex-1 p-6 sm:p-8 lg:p-10 space-y-6">
                 <div>
@@ -1111,13 +1244,14 @@ function ClientDashboardInner() {
                   </p>
                 </div>
               </div>
-            </section>
+            </div>
           </div>
-        )}
+        </section>
 
-        {/* Tab: FOTO */}
-        {activeTab === 'photos' && (
-          <div className="space-y-8">
+        {/* =========================================================================
+            SECTION 2: GALERI FOTO & SUARA
+            ========================================================================= */}
+        <section id="section-photos" className="scroll-mt-24 pt-8 border-t border-[#E5E1DA] space-y-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E1DA] pb-5">
               <div>
                 <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-[#666666] block">
@@ -1197,6 +1331,13 @@ function ClientDashboardInner() {
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => openDirectPrint(photo)}
+                              title="Cetak Foto (Print)"
+                              className="p-2 rounded-full hover:bg-neutral-100 text-[#666666] hover:text-[#111111] transition-colors cursor-pointer"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => handleDownloadSinglePhoto(photo)}
                               title="Download Foto"
@@ -1279,12 +1420,12 @@ function ClientDashboardInner() {
                 </div>
               )}
             </div>
-          </div>
-        )}
+        </section>
 
-        {/* Tab: TAMU */}
-        {activeTab === 'guests' && (
-          <div className="space-y-6">
+        {/* =========================================================================
+            SECTION 3: BUKU TAMU
+            ========================================================================= */}
+        <section id="section-guests" className="scroll-mt-24 pt-8 border-t border-[#E5E1DA] space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E1DA] pb-5">
               <div>
                 <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-[#666666] block">
@@ -1414,8 +1555,22 @@ function ClientDashboardInner() {
                 </div>
               </div>
             )}
-          </div>
-        )}
+        </section>
+
+        {/* =========================================================================
+            SECTION 4: PRINT STATION / ANTRIAN CETAK
+            ========================================================================= */}
+        <section id="section-print" className="scroll-mt-24 pt-8 border-t border-[#E5E1DA]">
+          {activeEvent && (
+            <VendorPrintStation
+              eventId={activeEvent.id}
+              eventName={activeEvent.name}
+              initialQueue={printRequests}
+              allPhotos={photos}
+              onQueueUpdated={loadClientData}
+            />
+          )}
+        </section>
       </main>
 
       {/* =========================================================================
@@ -1651,15 +1806,35 @@ function ClientDashboardInner() {
                         <Download className="w-3.5 h-3.5 text-[#D4A373]" />
                         <span>Download Foto Saja (JPG)</span>
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openDirectPrint(selectedPhoto)}
+                        className="w-full py-2.5 px-4 rounded-full bg-[#D4A373]/20 hover:bg-[#D4A373]/30 text-[#D4A373] border border-[#D4A373]/40 font-bold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-[#D4A373]" />
+                        <span>Cetak Foto (Print)</span>
+                      </button>
                     </>
                   ) : (
-                    <button
-                      onClick={() => handleDownloadSinglePhoto(selectedPhoto)}
-                      className="w-full py-3 px-4 rounded-full bg-[#D4A373] hover:bg-[#C5925F] text-[#1A1817] font-bold text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer active:scale-95"
-                    >
-                      <Download className="w-4 h-4 text-[#1A1817]" />
-                      <span>Download Foto (JPG)</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleDownloadSinglePhoto(selectedPhoto)}
+                        className="w-full py-3 px-4 rounded-full bg-[#D4A373] hover:bg-[#C5925F] text-[#1A1817] font-bold text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer active:scale-95"
+                      >
+                        <Download className="w-4 h-4 text-[#1A1817]" />
+                        <span>Download Foto (JPG)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openDirectPrint(selectedPhoto)}
+                        className="w-full py-2.5 px-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-semibold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 border border-white/20 cursor-pointer active:scale-95"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-[#D4A373]" />
+                        <span>Cetak Foto (Print)</span>
+                      </button>
+                    </>
                   )}
 
                   {/* Delete Button */}
@@ -1795,6 +1970,13 @@ function ClientDashboardInner() {
           </div>
         </div>
       )}
+
+      {/* DIRECT PRINT MODAL FOR GALLERY PHOTOS */}
+      <PrintLayoutModal
+        isOpen={isDirectPrintOpen}
+        onClose={() => setIsDirectPrintOpen(false)}
+        job={directPrintJob}
+      />
     </div>
   );
 }

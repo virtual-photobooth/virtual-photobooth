@@ -89,6 +89,26 @@ export interface VoiceMessage {
   guest?: Guest;
 }
 
+export type PrintStatus = 'pending' | 'printing' | 'completed' | 'cancelled';
+export type PrintLayoutType = 'strip_2x6' | 'full_4r' | 'grid_2r' | 'single_strip';
+
+export interface PrintRequest {
+  id: string;
+  event_id: string;
+  photo_id: string;
+  guest_id: string | null;
+  guest_name: string;
+  layout_type: PrintLayoutType | string;
+  copies: number;
+  status: PrintStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  printed_at: string | null;
+  photo?: Photo & { publicUrl?: string };
+  guest?: Guest;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -141,6 +161,17 @@ export interface Database {
         Update: Partial<Omit<VoiceMessage, 'id'>>;
         Relationships: [];
       };
+      print_requests: {
+        Row: PrintRequest;
+        Insert: Omit<PrintRequest, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          printed_at?: string | null;
+        };
+        Update: Partial<Omit<PrintRequest, 'id'>>;
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -158,6 +189,7 @@ export interface Database {
     Enums: {
       user_role: UserRole;
       event_status: EventStatus;
+      print_status: PrintStatus;
     };
     CompositeTypes: {
       [_ in never]: never;

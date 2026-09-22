@@ -141,6 +141,31 @@ export async function GET(request: Request) {
       };
     });
 
+    // 5b. Fetch print requests
+    let printRequestsData: any[] = [];
+    try {
+      const { data: prData, error: prErr } = await (supabaseAdmin.from('print_requests') as any)
+        .select('*, photo:photos(*), guest:guests(*)')
+        .in('event_id', eventIds)
+        .order('created_at', { ascending: false });
+
+      if (!prErr && prData) {
+        printRequestsData = prData.map((item: any) => ({
+          ...item,
+          photo: item.photo
+            ? {
+                ...item.photo,
+                publicUrl: item.photo.final_photo_path
+                  ? getStoragePublicUrl(item.photo.final_photo_path)
+                  : null,
+              }
+            : null,
+        }));
+      }
+    } catch (e) {
+      console.warn('Could not fetch print_requests:', e);
+    }
+
     const enrichedEvents = events.map((e: any) => {
       const cb = e.updated_at ? `?v=${new Date(e.updated_at).getTime()}` : '';
       let coverUrl = null;
@@ -160,10 +185,13 @@ export async function GET(request: Request) {
       guests: guestsData || [],
       photos: resolvedPhotos,
       voiceMessages: resolvedVoices,
+      printRequests: printRequestsData,
       counts: {
         guests: (guestsData || []).length,
         photos: (photosData || []).length,
         voices: resolvedVoices.length,
+        printRequests: printRequestsData.length,
+        printPending: printRequestsData.filter((p: any) => p.status === 'pending').length,
       },
     });
   } catch (err: any) {

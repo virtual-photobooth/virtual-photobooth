@@ -42,3 +42,50 @@ body {
   background: #111111;
   color: #ffffff;
 }
+
+/* ========================================================
+   PHOTOBOOTH DEDICATED PRINT STYLES (4R / 2x6 / 2R)
+   ======================================================== */
+#photobooth-print-mount {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: 4in 6in;
+    margin: 0;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide entire application DOM when printing */
+  body > *:not(#photobooth-print-mount) {
+    display: none !important;
+  }
+
+  /* Expose exclusively the high-resolution photobooth print mount */
+  body > #photobooth-print-mount {
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 99999999 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+}
+

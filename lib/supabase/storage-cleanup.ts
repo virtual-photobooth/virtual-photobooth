@@ -192,9 +192,11 @@ export async function cleanOrphanedMedia(eventId: string) {
   const supabaseAdmin = createAdminClient();
   const bucket = getStorageBucketName();
 
-  const [{ data: dbPhotos }, { data: dbVoices }] = await Promise.all([
+  const [{ data: dbPhotos }, { data: dbVoices }, { data: dbFrames }, { data: eventRow }] = await Promise.all([
     (supabaseAdmin.from('photos') as any).select('final_photo_path').eq('event_id', eventId),
     (supabaseAdmin.from('voice_messages') as any).select('audio_path').eq('event_id', eventId),
+    (supabaseAdmin.from('event_frames') as any).select('frame_path').eq('event_id', eventId),
+    (supabaseAdmin.from('events') as any).select('frame_path, cover_path').eq('id', eventId).maybeSingle(),
   ]);
 
   const activePhotoPaths = new Set(
@@ -203,15 +205,22 @@ export async function cleanOrphanedMedia(eventId: string) {
   const activeVoicePaths = new Set(
     (dbVoices || []).map((v: any) => cleanStoragePath(v.audio_path, bucket))
   );
+  const activeFramePaths = new Set(
+    (dbFrames || []).map((f: any) => cleanStoragePath(f.frame_path, bucket))
+  );
+  if (eventRow?.frame_path) activeFramePaths.add(cleanStoragePath(eventRow.frame_path, bucket));
+  if (eventRow?.cover_path) activeFramePaths.add(cleanStoragePath(eventRow.cover_path, bucket));
 
-  const [storagePhotos, storageVoices] = await Promise.all([
+  const [storagePhotos, storageVoices, storageFrames] = await Promise.all([
     listStorageFiles(`events/${eventId}/photos`, bucket),
     listStorageFiles(`events/${eventId}/voices`, bucket),
+    listStorageFiles(`events/${eventId}/frames`, bucket),
   ]);
 
   const orphanedPhotos = storagePhotos.filter((p) => !activePhotoPaths.has(p));
   const orphanedVoices = storageVoices.filter((v) => !activeVoicePaths.has(v));
-  const allOrphans = [...orphanedPhotos, ...orphanedVoices];
+  const orphanedFrames = storageFrames.filter((f) => !activeFramePaths.has(f));
+  const allOrphans = [...orphanedPhotos, ...orphanedVoices, ...orphanedFrames];
 
   if (allOrphans.length > 0) {
     await deleteMultipleFromStorage(allOrphans, bucket);
@@ -222,7 +231,179 @@ export async function cleanOrphanedMedia(eventId: string) {
     cleanedCount: allOrphans.length,
     orphanedPhotos,
     orphanedVoices,
+    orphanedFrames,
   };
+}
+
+/**
+ * Safely purges a client record, its associated profile in public.profiles,
+ * and its Supabase auth.users account (ONLY IF role === 'client', NEVER deletes 'owner').
+ */
+export async function purgeClientAndProfile(clientId: string, clientEmail?: string | null) {
+  const supabaseAdmin = createAdminClient();
+
+  try {
+    let email = clientEmail;
+    let userId: string | null = null;
+
+    const { data: clientRecord } = await (supabaseAdmin.from('clients') as any)
+      .select('id, user_id, contact_email')
+      .eq('id', clientId)
+      .maybeSingle();
+
+    if (clientRecord) {
+      email = email || clientRecord.contact_email;
+      userId = userId || clientRecord.user_id;
+    }
+
+    // Check if this client has any OTHER active events
+    const { data: otherEvents } = await (supabaseAdmin.from('events') as any)
+      .select('id, status')
+      .eq('client_id', clientId)
+      .neq('status', 'completed');
+
+    if (otherEvents && otherEvents.length > 0) {
+      // Client still has other active events, do not delete client account
+      return { skipped: true, reason: 'Client has other active events' };
+    }
+
+    // 1. Delete client row from public.clients
+    await (supabaseAdmin.from('clients') as any).delete().eq('id', clientId);
+
+    // 2. Identify profile to delete
+    let profileToDelete: any = null;
+
+    if (userId) {
+      const { data: p } = await (supabaseAdmin.from('profiles') as any)
+        .select('id, email, role')
+        .eq('id', userId)
+        .maybeSingle();
+      if (p) profileToDelete = p;
+    }
+
+    if (!profileToDelete && email) {
+      const { data: p } = await (supabaseAdmin.from('profiles') as any)
+        .select('id, email, role')
+        .ilike('email', email.trim().toLowerCase())
+        .maybeSingle();
+      if (p) profileToDelete = p;
+    }
+
+    // STRICT SAFETY CHECK: Never delete owner profiles!
+    if (profileToDelete && profileToDelete.role === 'client') {
+      // Delete user from Supabase Auth
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(profileToDelete.id);
+      } catch (authErr: any) {
+        console.warn('Auth user delete warning:', authErr?.message);
+      }
+
+      // Delete from public.profiles
+      await (supabaseAdmin.from('profiles') as any)
+        .delete()
+        .eq('id', profileToDelete.id)
+        .eq('role', 'client');
+
+      return { success: true, deletedProfileId: profileToDelete.id, email: profileToDelete.email };
+    }
+
+    return { success: true, clientDeleted: true };
+  } catch (err: any) {
+    console.error('Error in purgeClientAndProfile:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Completely purges all data of a completed event (photos, voices, guests, print requests, client profile)
+ * while optionally retaining the event row itself as 'completed'.
+ */
+export async function purgeCompletedEventData(eventId: string) {
+  const supabaseAdmin = createAdminClient();
+  const bucket = getStorageBucketName();
+  const pathsToDelete = new Set<string>();
+
+  // Fetch client_id, frame_path, and cover_path
+  let clientId: string | null = null;
+  try {
+    const { data: evt } = await (supabaseAdmin.from('events') as any)
+      .select('id, client_id, frame_path, cover_path')
+      .eq('id', eventId)
+      .maybeSingle();
+    clientId = evt?.client_id || null;
+    if (evt?.frame_path) pathsToDelete.add(cleanStoragePath(evt.frame_path, bucket));
+    if (evt?.cover_path) pathsToDelete.add(cleanStoragePath(evt.cover_path, bucket));
+  } catch (e) {
+    // silent
+  }
+
+  // Collect event_frames storage files
+  try {
+    const { data: frames } = await (supabaseAdmin.from('event_frames') as any)
+      .select('frame_path')
+      .eq('event_id', eventId);
+    (frames || []).forEach((f: any) => {
+      if (f.frame_path) pathsToDelete.add(cleanStoragePath(f.frame_path, bucket));
+    });
+  } catch (e) {}
+
+  // Also collect any remaining storage files under events/${eventId}/frames and events/${eventId}/frame
+  try {
+    const frameStorageFiles = await listStorageFiles(`events/${eventId}/frames`, bucket);
+    frameStorageFiles.forEach((p) => pathsToDelete.add(p));
+    const singleFrameStorageFiles = await listStorageFiles(`events/${eventId}/frame`, bucket);
+    singleFrameStorageFiles.forEach((p) => pathsToDelete.add(p));
+  } catch (e) {}
+
+  // Collect photo and voice storage files
+  try {
+    const { data: photos } = await (supabaseAdmin.from('photos') as any)
+      .select('final_photo_path')
+      .eq('event_id', eventId);
+    (photos || []).forEach((p: any) => {
+      if (p.final_photo_path) pathsToDelete.add(cleanStoragePath(p.final_photo_path, bucket));
+    });
+  } catch (e) {}
+
+  try {
+    const { data: voices } = await (supabaseAdmin.from('voice_messages') as any)
+      .select('audio_path')
+      .eq('event_id', eventId);
+    (voices || []).forEach((v: any) => {
+      if (v.audio_path) pathsToDelete.add(cleanStoragePath(v.audio_path, bucket));
+    });
+  } catch (e) {}
+
+  // Delete storage files
+  const allFiles = Array.from(pathsToDelete);
+  if (allFiles.length > 0) {
+    await deleteMultipleFromStorage(allFiles, bucket);
+  }
+
+  // Delete print_requests, photos, voice_messages, guests, and event_frames
+  try {
+    await (supabaseAdmin.from('print_requests') as any).delete().eq('event_id', eventId);
+  } catch (e) {}
+  await (supabaseAdmin.from('photos') as any).delete().eq('event_id', eventId);
+  await (supabaseAdmin.from('voice_messages') as any).delete().eq('event_id', eventId);
+  await (supabaseAdmin.from('guests') as any).delete().eq('event_id', eventId);
+  try {
+    await (supabaseAdmin.from('event_frames') as any).delete().eq('event_id', eventId);
+  } catch (e) {}
+
+  // Clear frame_path and cover_path on events row
+  try {
+    await (supabaseAdmin.from('events') as any)
+      .update({ frame_path: null, cover_path: null })
+      .eq('id', eventId);
+  } catch (e) {}
+
+  // Clean up client and profile if no other active events
+  if (clientId) {
+    await purgeClientAndProfile(clientId);
+  }
+
+  return { success: true, deletedFilesCount: allFiles.length };
 }
 
 /**
@@ -231,6 +412,18 @@ export async function cleanOrphanedMedia(eventId: string) {
 export async function purgeEventCompletely(eventId: string) {
   const supabaseAdmin = createAdminClient();
   const bucket = getStorageBucketName();
+
+  // 0. Fetch event and client info before deletion
+  let clientId: string | null = null;
+  try {
+    const { data: evt } = await (supabaseAdmin.from('events') as any)
+      .select('id, client_id')
+      .eq('id', eventId)
+      .maybeSingle();
+    clientId = evt?.client_id || null;
+  } catch (e) {
+    // silent
+  }
 
   // 1. Collect all known paths from database before deleting rows
   const pathsToDelete = new Set<string>();
@@ -255,6 +448,19 @@ export async function purgeEventCompletely(eventId: string) {
     (voices || []).forEach((v: any) => {
       if (v.audio_path) {
         pathsToDelete.add(cleanStoragePath(v.audio_path, bucket));
+      }
+    });
+  } catch (e) {
+    // silent
+  }
+
+  try {
+    const { data: frames } = await (supabaseAdmin.from('event_frames') as any)
+      .select('frame_path')
+      .eq('event_id', eventId);
+    (frames || []).forEach((f: any) => {
+      if (f.frame_path) {
+        pathsToDelete.add(cleanStoragePath(f.frame_path, bucket));
       }
     });
   } catch (e) {
@@ -287,6 +493,11 @@ export async function purgeEventCompletely(eventId: string) {
   }
 
   // 4. Delete all database records in cascade order
+  try {
+    await (supabaseAdmin.from('print_requests') as any).delete().eq('event_id', eventId);
+  } catch (e) {
+    // silent
+  }
   await (supabaseAdmin.from('photos') as any).delete().eq('event_id', eventId);
   await (supabaseAdmin.from('voice_messages') as any).delete().eq('event_id', eventId);
   await (supabaseAdmin.from('guests') as any).delete().eq('event_id', eventId);
@@ -299,6 +510,11 @@ export async function purgeEventCompletely(eventId: string) {
 
   if (eventDeleteErr) {
     throw eventDeleteErr;
+  }
+
+  // 5. Purge client and client profile/auth.users account
+  if (clientId) {
+    await purgeClientAndProfile(clientId);
   }
 
   return { success: true, deletedFilesCount: allFilesList.length };

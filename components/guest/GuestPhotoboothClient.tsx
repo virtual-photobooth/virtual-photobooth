@@ -31,12 +31,14 @@ import {
   Loader2,
   Image as ImageIcon,
   ExternalLink,
+  Printer,
 } from 'lucide-react';
 import { validateEventSlug } from '@/lib/events/validate';
 import EventUnavailable from '@/components/guest/EventUnavailable';
 import FrameSelector from './FrameSelector';
 import ResultFrameSwitcher from './ResultFrameSwitcher';
 import AndroidBrowserAdvisor from './AndroidBrowserAdvisor';
+import GuestRequestPrintModal from './GuestRequestPrintModal';
 
 interface GuestPhotoboothClientProps {
   params: Promise<{ slug: string }>;
@@ -177,6 +179,10 @@ export default function GuestPhotoboothClient({
   const [uploadedPhotoId, setUploadedPhotoId] = useState<string | null>(null);
   const uploadedGuestIdRef = useRef<string | null>(null);
   const uploadedPhotoIdRef = useRef<string | null>(null);
+
+  // Guest Print Request State
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [hasRequestedPrint, setHasRequestedPrint] = useState(false);
 
   // Load Event Details by Slug with Strict Validation (ONE URL = ONE EVENT)
   useEffect(() => {
@@ -704,6 +710,8 @@ export default function GuestPhotoboothClient({
     uploadedGuestIdRef.current = null;
     setAutoUploadStatus('idle');
     setAutoUploadError(null);
+    setHasRequestedPrint(false);
+    setIsPrintModalOpen(false);
 
     setCapturedSnapshots([]);
     capturedSnapshotsRef.current = [];
@@ -1605,8 +1613,34 @@ export default function GuestPhotoboothClient({
             </button>
           </div>
 
-          {/* Action Buttons: Download & Gallery */}
+          {/* Action Buttons: Print, Download & Gallery */}
           <div className="w-full space-y-2.5">
+            {/* Print Request Action Button */}
+            {autoUploadStatus === 'success' && uploadedPhotoId && (
+              <button
+                type="button"
+                onClick={() => setIsPrintModalOpen(true)}
+                disabled={hasRequestedPrint}
+                className={`w-full py-3.5 px-6 rounded-full font-bold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 ${
+                  hasRequestedPrint
+                    ? 'bg-emerald-50 border border-emerald-300 text-emerald-800 cursor-default'
+                    : 'bg-gradient-to-r from-[#D4A373] via-[#E5B887] to-[#B88746] hover:from-[#C5925F] hover:to-[#A77838] text-[#1A1817] cursor-pointer shadow-[#D4A373]/25'
+                }`}
+              >
+                {hasRequestedPrint ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Permintaan Cetak Terkirim</span>
+                  </>
+                ) : (
+                  <>
+                    <Printer className="w-4 h-4 text-[#1A1817]" />
+                    <span>🖨️ Minta Cetak di Booth</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {/* Primary Action: Download Photo */}
             <button
               onClick={downloadCompositedPhoto}
@@ -1866,6 +1900,21 @@ export default function GuestPhotoboothClient({
             </button>
           </div>
         </div>
+      )}
+      {/* GUEST REQUEST PRINT MODAL */}
+      {event && compositedImage && uploadedPhotoId && (
+        <GuestRequestPrintModal
+          isOpen={isPrintModalOpen}
+          onClose={() => setIsPrintModalOpen(false)}
+          photoUrl={compositedImage}
+          photoId={uploadedPhotoId}
+          eventId={event.id}
+          initialGuestName={guestName}
+          guestId={uploadedGuestId}
+          onSuccess={() => {
+            setHasRequestedPrint(true);
+          }}
+        />
       )}
         </div>
       </div>

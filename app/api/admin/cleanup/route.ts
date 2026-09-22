@@ -1,40 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { deleteMultipleFromStorage } from '@/lib/storage';
 import { purgeClientAndProfile } from '@/lib/supabase/storage-cleanup';
+import { deleteMultipleFromStorage } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Retention Cleanup Cron Endpoint
- * Automatically deletes photos, voice messages, print requests, guest records,
- * and client profiles once an event is completed or expired (event_date + retention_days).
- */
-export async function GET(request: Request) {
-  return handleCleanup(request);
-}
-
 export async function POST(request: Request) {
-  return handleCleanup(request);
-}
-
-async function handleCleanup(request: Request) {
   try {
-    // Optional CRON_SECRET auth check
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized cron execution' }, { status: 401 });
-    }
-
     const supabaseAdmin = createAdminClient();
     const now = new Date();
     const nowIso = now.toISOString();
 
-    // -------------------------------------------------------------
-    // 1. FETCH ALL EVENTS TO CHECK EXPIRATION / COMPLETION
-    // -------------------------------------------------------------
+    // 1. Fetch all events
     const { data: events, error: eventsErr } = await (supabaseAdmin.from('events') as any)
       .select('id, name, client_id, event_date, voice_retention_days, status');
 
@@ -73,22 +50,20 @@ async function handleCleanup(request: Request) {
       }
     }
 
-    // -------------------------------------------------------------
-    // 2. CLEANUP EXPIRED / COMPLETED EVENTS DATA
-    // -------------------------------------------------------------
+    // 2. Clean up data of expired/completed events
     if (expiredEventIds.length > 0) {
-      // 2a. Print requests cleanup
+      // 2a. Print requests
       try {
         const { data: delPR } = await (supabaseAdmin.from('print_requests') as any)
           .delete()
           .in('event_id', expiredEventIds)
           .select('id');
-        cleanedPrintRequestsCount = (delPR || []).length;
-      } catch (prErr) {
-        console.warn('Cron print_requests cleanup warning:', prErr);
+        cleanedPrintRequestsCount += (delPR || []).length;
+      } catch (e) {
+        console.warn('Print requests cleanup warning:', e);
       }
 
-      // 2b. Photos cleanup
+      // 2b. Photos
       const { data: expiredPhotos } = await (supabaseAdmin.from('photos') as any)
         .select('id, final_photo_path')
         .in('event_id', expiredEventIds);
@@ -102,7 +77,7 @@ async function handleCleanup(request: Request) {
         cleanedPhotoCount += expiredPhotos.length;
       }
 
-      // 2c. Voice messages cleanup
+      // 2c. Voice messages
       const { data: expiredVoices } = await (supabaseAdmin.from('voice_messages') as any)
         .select('id, audio_path')
         .in('event_id', expiredEventIds);
@@ -116,7 +91,7 @@ async function handleCleanup(request: Request) {
         cleanedVoiceCount += expiredVoices.length;
       }
 
-      // 2d. Guests cleanup
+      // 2d. Guests
       const { data: expiredGuests } = await (supabaseAdmin.from('guests') as any)
         .select('id')
         .in('event_id', expiredEventIds);
@@ -137,7 +112,6 @@ async function handleCleanup(request: Request) {
           if (f.frame_path) framePathsToDelete.push(f.frame_path);
         });
 
-        // Also collect cover and frame paths from events table
         const { data: expiredEventMeta } = await (supabaseAdmin.from('events') as any)
           .select('id, frame_path, cover_path')
           .in('id', expiredEventIds);
@@ -158,49 +132,26 @@ async function handleCleanup(request: Request) {
 
         cleanedFramesCount += (expiredFrames || []).length;
       } catch (frameErr) {
-        console.warn('Cron event_frames cleanup warning:', frameErr);
+        console.warn('Manual cleanup event_frames warning:', frameErr);
       }
 
-      // 2f. Profiles & Clients cleanup
-      // Safely deletes client rows and their associated public.profiles / auth.users (role = 'client' ONLY)
+      // 2f. Clients and profiles of completed/expired events
       for (const clientId of Array.from(clientIdsToCheck)) {
         try {
           const res = await purgeClientAndProfile(clientId);
           if (res && (res as any).deletedProfileId) {
             cleanedProfilesCount++;
           }
-        } catch (clientErr) {
-          console.warn('Cron client/profile cleanup warning:', clientErr);
+        } catch (e) {
+          console.warn('Client purge error:', e);
         }
       }
 
       cleanedEventsCount = expiredEventIds.length;
     }
 
-    // -------------------------------------------------------------
-    // 3. CLEANUP ANY INDIVIDUAL EXPIRED VOICE MESSAGES (expires_at <= now)
-    // -------------------------------------------------------------
-    const { data: orphanExpiredVoices } = await (supabaseAdmin.from('voice_messages') as any)
-      .select('id, audio_path')
-      .lte('expires_at', nowIso);
-
-    if (orphanExpiredVoices && orphanExpiredVoices.length > 0) {
-      const audioPaths = orphanExpiredVoices.map((v: any) => v.audio_path).filter(Boolean);
-      const voiceIds = orphanExpiredVoices.map((v: any) => v.id);
-
-      if (audioPaths.length > 0) {
-        await deleteMultipleFromStorage(audioPaths);
-      }
-      await (supabaseAdmin.from('voice_messages') as any).delete().in('id', voiceIds);
-      cleanedVoiceCount += voiceIds.length;
-    }
-
-    // -------------------------------------------------------------
-    // 4. CLEANUP ORPHANED CLIENTS, CLIENT PROFILES & ORPHAN FRAMES
-    // (Profiles & Clients with role = 'client' whose event no longer exists or is completed)
-    // -------------------------------------------------------------
+    // 3. Clean up orphaned clients, profiles, and orphaned frames
     try {
-      // 4a. Fetch all current active events
       const { data: currentActiveEvents } = await (supabaseAdmin.from('events') as any)
         .select('id, client_id, status')
         .neq('status', 'completed');
@@ -217,7 +168,7 @@ async function handleCleanup(request: Request) {
           .filter(Boolean)
       );
 
-      // 4b. Clean up orphaned event_frames (frames whose event no longer exists or is completed)
+      // Clean up orphaned event_frames
       try {
         const { data: allFrames } = await (supabaseAdmin.from('event_frames') as any)
           .select('id, event_id, frame_path');
@@ -243,7 +194,6 @@ async function handleCleanup(request: Request) {
         console.warn('Orphan event_frames cleanup warning:', fErr);
       }
 
-      // 4c. Fetch all clients
       const { data: allClients } = await (supabaseAdmin.from('clients') as any)
         .select('id, user_id, contact_email');
 
@@ -252,7 +202,6 @@ async function handleCleanup(request: Request) {
 
       for (const client of allClients || []) {
         if (!activeClientIds.has(client.id)) {
-          // This client has no active events left! Purge it!
           const purgeRes = await purgeClientAndProfile(client.id, client.contact_email);
           if (purgeRes && (purgeRes as any).deletedProfileId) {
             cleanedProfilesCount++;
@@ -263,7 +212,6 @@ async function handleCleanup(request: Request) {
         }
       }
 
-      // 4d. Clean up any remaining orphaned profiles with role = 'client'
       const { data: allClientProfiles } = await (supabaseAdmin.from('profiles') as any)
         .select('id, email, role')
         .eq('role', 'client');
@@ -271,7 +219,6 @@ async function handleCleanup(request: Request) {
       for (const prof of allClientProfiles || []) {
         const emailKey = prof.email?.trim().toLowerCase();
         if (!activeProfileUserIds.has(prof.id) && (!emailKey || !activeProfileEmails.has(emailKey))) {
-          // Orphan profile with no active event or client! Delete it!
           try {
             await supabaseAdmin.auth.admin.deleteUser(prof.id);
           } catch (e) {
@@ -284,14 +231,13 @@ async function handleCleanup(request: Request) {
           cleanedProfilesCount++;
         }
       }
-    } catch (orphanErr) {
-      console.warn('Orphan cleanup warning:', orphanErr);
+    } catch (e) {
+      console.warn('Orphan cleanup error:', e);
     }
 
     return NextResponse.json({
       success: true,
-      timestamp: nowIso,
-      message: `Pembersihan selesai: ${cleanedEventsCount} event selesai/kadaluarsa, ${cleanedPhotoCount} foto, ${cleanedVoiceCount} suara, ${cleanedPrintRequestsCount} antrian cetak, ${cleanedFramesCount} frame event, ${cleanedGuestCount} tamu, dan ${cleanedProfilesCount} profil klien dibersihkan.`,
+      message: `Pembersihan berhasil: ${cleanedEventsCount} event selesai/kadaluarsa, ${cleanedPhotoCount} foto, ${cleanedVoiceCount} suara, ${cleanedPrintRequestsCount} antrian cetak, ${cleanedFramesCount} frame event, ${cleanedGuestCount} tamu, dan ${cleanedProfilesCount} profil klien dibersihkan.`,
       cleanedEventsCount,
       cleanedPhotoCount,
       cleanedVoiceCount,
@@ -301,9 +247,9 @@ async function handleCleanup(request: Request) {
       cleanedProfilesCount,
     });
   } catch (err: any) {
-    console.error('Cron cleanup error:', err);
+    console.error('Manual admin cleanup error:', err);
     return NextResponse.json(
-      { error: err.message || 'Gagal menjalankan pembersihan retensi data' },
+      { success: false, message: err.message || 'Gagal menjalankan pembersihan data' },
       { status: 500 }
     );
   }

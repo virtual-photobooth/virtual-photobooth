@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { purgeEventCompletely } from '@/lib/supabase/storage-cleanup';
+import { purgeEventCompletely, purgeCompletedEventData } from '@/lib/supabase/storage-cleanup';
 
 export async function GET(request: Request) {
   try {
@@ -173,6 +173,15 @@ export async function PUT(request: Request) {
 
       if (retryError) throw retryError;
       data = retryData;
+    }
+
+    // If event is marked as completed, purge its photos, voices, guests, print requests, and client profile
+    if (updateFields.status === 'completed') {
+      try {
+        await purgeCompletedEventData(id);
+      } catch (purgeErr) {
+        console.warn('Completed event data purge warning:', purgeErr);
+      }
     }
 
     return NextResponse.json({ success: true, event: data });

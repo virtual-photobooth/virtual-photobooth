@@ -18,9 +18,12 @@ import {
   Heart,
   Film,
   FolderArchive,
+  Printer,
+  CheckCircle2,
 } from 'lucide-react';
 import Link from 'next/link';
 import EventUnavailable from '@/components/guest/EventUnavailable';
+import GuestRequestPrintModal from './GuestRequestPrintModal';
 import {
   batchDownloadGallery,
   exportPhotoWithAudioToVideo,
@@ -66,6 +69,10 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioError, setAudioError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Print Modal State
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printedItems, setPrintedItems] = useState<Set<string>>(new Set());
 
   // Responsive Column Distribution for True Pinterest Masonry
   const [colCount, setColCount] = useState<number>(4);
@@ -626,15 +633,65 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
                     <Download className="w-3.5 h-3.5 text-[#D4A373]" />
                     <span>Download Foto Saja (JPG)</span>
                   </button>
+
+                  {/* Print Request Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsPrintModalOpen(true)}
+                    disabled={printedItems.has(selectedItem.id)}
+                    className={`w-full py-2.5 px-4 rounded-full font-bold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 ${
+                      printedItems.has(selectedItem.id)
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default'
+                        : 'bg-white/5 hover:bg-white/15 text-white/90 border border-white/15 hover:border-[#D4A373]/50'
+                    }`}
+                  >
+                    {printedItems.has(selectedItem.id) ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Permintaan Cetak Terkirim</span>
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="w-3.5 h-3.5 text-[#D4A373]" />
+                        <span>Minta Cetak di Booth</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => handleDownloadSinglePhoto(selectedItem)}
-                  className="w-full py-3 px-4 rounded-full bg-[#D4A373] hover:bg-[#C5925F] text-[#1A1817] font-bold text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer active:scale-95"
-                >
-                  <Download className="w-4 h-4 text-[#1A1817]" />
-                  <span>Download Foto (JPG)</span>
-                </button>
+                <div className="w-full space-y-2 pt-1">
+                  <button
+                    onClick={() => handleDownloadSinglePhoto(selectedItem)}
+                    className="w-full py-3 px-4 rounded-full bg-[#D4A373] hover:bg-[#C5925F] text-[#1A1817] font-bold text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer active:scale-95"
+                  >
+                    <Download className="w-4 h-4 text-[#1A1817]" />
+                    <span>Download Foto (JPG)</span>
+                  </button>
+
+                  {/* Print Request Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsPrintModalOpen(true)}
+                    disabled={printedItems.has(selectedItem.id)}
+                    className={`w-full py-2.5 px-4 rounded-full font-bold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 ${
+                      printedItems.has(selectedItem.id)
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default'
+                        : 'bg-white/10 hover:bg-white/20 text-white border border-white/20 hover:border-[#D4A373]/50'
+                    }`}
+                  >
+                    {printedItems.has(selectedItem.id) ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Permintaan Cetak Terkirim</span>
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="w-3.5 h-3.5 text-[#D4A373]" />
+                        <span>Minta Cetak di Booth</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -687,6 +744,22 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
             </button>
           </div>
         </div>
+      )}
+
+      {/* GUEST REQUEST PRINT MODAL */}
+      {event && selectedItem && (
+        <GuestRequestPrintModal
+          isOpen={isPrintModalOpen}
+          onClose={() => setIsPrintModalOpen(false)}
+          photoUrl={selectedItem.photoUrl}
+          photoId={selectedItem.id}
+          eventId={event.id}
+          initialGuestName={selectedItem.guestName}
+          guestId={selectedItem.guestId}
+          onSuccess={() => {
+            setPrintedItems((prev) => new Set([...prev, selectedItem.id]));
+          }}
+        />
       )}
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { HardDrive, Image as ImageIcon, Mic, Database, ArrowUpRight, BarChart2 } from 'lucide-react';
+import { HardDrive, Image as ImageIcon, Mic, Database, ArrowUpRight, BarChart2, RefreshCw } from 'lucide-react';
 
 export default function StoragePage() {
   const supabase = createClient();
@@ -16,41 +16,67 @@ export default function StoragePage() {
     totalGb: '0.00',
   });
 
-  useEffect(() => {
-    async function loadStorageStats() {
-      try {
-        setLoading(true);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanMessage, setCleanMessage] = useState<string | null>(null);
 
-        const [{ count: pCount }, { count: vCount }] = await Promise.all([
-          supabase.from('photos').select('*', { count: 'exact', head: true }),
-          supabase.from('voice_messages').select('*', { count: 'exact', head: true }),
-        ]);
+  const loadStorageStats = async () => {
+    try {
+      setLoading(true);
 
-        const photos = pCount || 0;
-        const voices = vCount || 0;
+      const [{ count: pCount }, { count: vCount }] = await Promise.all([
+        supabase.from('photos').select('*', { count: 'exact', head: true }),
+        supabase.from('voice_messages').select('*', { count: 'exact', head: true }),
+      ]);
 
-        const photoMb = (photos * 1.5).toFixed(1);
-        const voiceMb = (voices * 0.4).toFixed(1);
-        const totalMbNum = photos * 1.5 + voices * 0.4;
-        const totalGbNum = (totalMbNum / 1024).toFixed(2);
+      const photos = pCount || 0;
+      const voices = vCount || 0;
 
-        setStats({
-          photoCount: photos,
-          voiceCount: voices,
-          estimatedPhotoMb: photoMb,
-          estimatedVoiceMb: voiceMb,
-          totalMb: totalMbNum.toFixed(1),
-          totalGb: totalGbNum,
-        });
-      } catch (err) {
-        console.error('Failed to fetch storage stats:', err);
-      } finally {
-        setLoading(false);
-      }
+      const photoMb = (photos * 1.5).toFixed(1);
+      const voiceMb = (voices * 0.4).toFixed(1);
+      const totalMbNum = photos * 1.5 + voices * 0.4;
+      const totalGbNum = (totalMbNum / 1024).toFixed(2);
+
+      setStats({
+        photoCount: photos,
+        voiceCount: voices,
+        estimatedPhotoMb: photoMb,
+        estimatedVoiceMb: voiceMb,
+        totalMb: totalMbNum.toFixed(1),
+        totalGb: totalGbNum,
+      });
+    } catch (err) {
+      console.error('Failed to fetch storage stats:', err);
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     loadStorageStats();
   }, [supabase]);
+
+  const handleRunCleanup = async () => {
+    if (!confirm('Jalankan pembersihan sekarang? Semua event yang telah selesai atau lewat masa retensi akan dibersihkan foto, suara, antrian cetak, frame event, dan akun profil klien-nya.')) return;
+
+    setCleaning(true);
+    setCleanMessage(null);
+
+    try {
+      const res = await fetch('/api/admin/cleanup', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.success) {
+        setCleanMessage(data.message);
+        await loadStorageStats();
+      } else {
+        setCleanMessage(`Gagal: ${data.message || 'Terjadi kesalahan'}`);
+      }
+    } catch (e: any) {
+      setCleanMessage(`Error: ${e.message || 'Koneksi gagal'}`);
+    } finally {
+      setCleaning(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -154,6 +180,34 @@ export default function StoragePage() {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Auto-Purge & Retention Action Card */}
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-8 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-base font-bold text-[#1A2621]">Pembersihan Otomatis Data Event &amp; Profil Klien</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Hapus foto, rekaman suara, antrian cetak, dan akun login profil klien dari Supabase untuk event yang telah selesai atau lewat masa retensinya.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleRunCleanup}
+            disabled={cleaning}
+            className="px-5 py-3 rounded-full bg-[#1A2621] hover:bg-[#2C3B34] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-md disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${cleaning ? 'animate-spin' : ''}`} />
+            <span>{cleaning ? 'Sedang Membersihkan...' : 'Jalankan Pembersihan Sekarang'}</span>
+          </button>
+        </div>
+
+        {cleanMessage && (
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium">
+            {cleanMessage}
+          </div>
+        )}
       </div>
     </div>
   );
