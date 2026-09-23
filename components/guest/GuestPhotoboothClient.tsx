@@ -664,9 +664,19 @@ export default function GuestPhotoboothClient({
         }),
       });
 
-      const resData = await res.json();
-      if (!res.ok || !resData.success) {
-        throw new Error(resData?.message || 'Gagal menyimpan foto otomatis.');
+      let resData: any = null;
+      try {
+        const text = await res.text();
+        resData = text ? JSON.parse(text) : null;
+      } catch {
+        resData = null;
+      }
+
+      if (!res.ok || !resData?.success) {
+        if (res.status === 413) {
+          throw new Error('Ukuran foto terlalu besar untuk disimpan otomatis.');
+        }
+        throw new Error(resData?.message || (res.status >= 500 ? 'Server sedang sibuk, silakan coba beberapa saat lagi.' : 'Gagal menyimpan foto otomatis.'));
       }
 
       if (resData.guestId) {
@@ -961,9 +971,20 @@ export default function GuestPhotoboothClient({
         }),
       });
 
-      const resData = await res.json();
-      if (!res.ok || !resData.success) {
-        console.error('Guestbook submit failed:', resData?.message);
+      let resData: any = null;
+      try {
+        const text = await res.text();
+        resData = text ? JSON.parse(text) : null;
+      } catch {
+        resData = null;
+      }
+
+      if (!res.ok || !resData?.success) {
+        console.error('Guestbook submit failed:', resData?.message || res.status);
+        if (res.status === 413) {
+          alert('Ukuran berkas terlalu besar untuk disimpan ke server.');
+          return;
+        }
         alert(resData?.message || 'Gagal menyimpan memory ke database.');
         return;
       }

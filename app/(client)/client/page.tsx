@@ -1699,7 +1699,7 @@ function ClientDashboardInner() {
                 </div>
 
                 {/* Audio Player Container or Friendly Empty State */}
-                {selectedPhoto.voiceUrl && !modalAudioError ? (
+                {selectedPhoto.voiceUrl ? (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between px-1">
                       <div className="flex items-center gap-1.5 text-[#D4A373]">
@@ -1778,7 +1778,7 @@ function ClientDashboardInner() {
 
                 {/* Action Buttons */}
                 <div className="space-y-2 pt-1">
-                  {selectedPhoto.voiceUrl && !modalAudioError ? (
+                  {selectedPhoto.voiceUrl ? (
                     <>
                       <button
                         onClick={() => handleDownloadSingleVideo(selectedPhoto)}

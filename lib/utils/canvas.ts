@@ -15,24 +15,33 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     frameImg = await loadFrameImage(frameImageUrl);
   }
 
-  // Determine dynamic canvas dimensions matching frame aspect ratio
-  // Base maximum dimension is 3240px for print-grade photobooth clarity
-  let canvasWidth = 2160;
-  let canvasHeight = 3240;
+  // Calibrated target maximum dimension for photobooth print quality (300 DPI at 4R)
+  // while ensuring transparent PNG payloads strictly fit within serverless limits (< 3.5MB).
+  const MAX_TARGET_DIMENSION = 1800;
+  const MIN_TARGET_DIMENSION = 1200;
+
+  let canvasWidth = 1200;
+  let canvasHeight = 1800;
 
   if (frameImg && frameImg.naturalWidth > 0 && frameImg.naturalHeight > 0) {
     const fW = frameImg.naturalWidth;
     const fH = frameImg.naturalHeight;
     const ratio = fW / fH;
+    const maxNatural = Math.max(fW, fH);
+
+    // If natural resolution is between MIN and MAX, use natural dimensions directly for 1:1 pixel perfection.
+    // If it exceeds MAX (e.g. 4K frame), cap at MAX_TARGET_DIMENSION to prevent memory overflows.
+    // If it is smaller than MIN, scale up to MIN_TARGET_DIMENSION for crisp print resolution.
+    const targetMax = Math.min(MAX_TARGET_DIMENSION, Math.max(MIN_TARGET_DIMENSION, maxNatural));
 
     if (fW >= fH) {
       // Landscape or Square
-      canvasWidth = 3240;
-      canvasHeight = Math.max(1080, Math.round(3240 / ratio));
+      canvasWidth = targetMax;
+      canvasHeight = Math.max(600, Math.round(targetMax / ratio));
     } else {
       // Portrait
-      canvasHeight = 3240;
-      canvasWidth = Math.max(1080, Math.round(3240 * ratio));
+      canvasHeight = targetMax;
+      canvasWidth = Math.max(600, Math.round(targetMax * ratio));
     }
   }
 
@@ -318,7 +327,27 @@ export async function createFinalPhotoComposite(options: CompositeOptions): Prom
     drawDefaultBranding(ctx, canvasWidth, canvasHeight, eventName, eventDate);
   }
 
-  const resultDataUrl = canvas.toDataURL('image/png');
+  let resultDataUrl = canvas.toDataURL('image/png');
+
+  // Hard safety guard: Vercel serverless request body limit is 4.5MB.
+  // If base64 length exceeds 3.5MB (~2.6MB raw file), downscale slightly to guarantee successful upload.
+  const MAX_B64_SAFE_LENGTH = 3.5 * 1024 * 1024;
+  if (resultDataUrl.length > MAX_B64_SAFE_LENGTH) {
+    const scaleFactor = Math.sqrt((2.8 * 1024 * 1024) / resultDataUrl.length);
+    const safeW = Math.round(canvasWidth * scaleFactor);
+    const safeH = Math.round(canvasHeight * scaleFactor);
+
+    const safeCanvas = document.createElement('canvas');
+    safeCanvas.width = safeW;
+    safeCanvas.height = safeH;
+    const safeCtx = safeCanvas.getContext('2d');
+    if (safeCtx) {
+      safeCtx.imageSmoothingEnabled = true;
+      safeCtx.imageSmoothingQuality = 'high';
+      safeCtx.drawImage(canvas, 0, 0, safeW, safeH);
+      resultDataUrl = safeCanvas.toDataURL('image/png');
+    }
+  }
 
   // Memory cleanup: release image resources to avoid OOM crashes on low-end Android devices
   try {

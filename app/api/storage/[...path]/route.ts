@@ -6,6 +6,19 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Range, Content-Type, Authorization',
+      'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ path: string[] }> }
@@ -20,6 +33,8 @@ export async function GET(
       return new NextResponse('File not found', { status: 404 });
     }
 
+    const rangeHeader = request.headers.get('range') || request.headers.get('Range') || undefined;
+
     // 1. Try serving directly from Cloudflare R2 via S3 SDK
     if (isR2Configured()) {
       try {
@@ -27,6 +42,7 @@ export async function GET(
         const command = new GetObjectCommand({
           Bucket: bucket,
           Key: cleanKey,
+          ...(rangeHeader ? { Range: rangeHeader } : {}),
         });
         const response = await client.send(command);
 
@@ -36,14 +52,21 @@ export async function GET(
 
           if (response.ContentType) headers.set('Content-Type', response.ContentType);
           if (response.ContentLength) headers.set('Content-Length', response.ContentLength.toString());
+          if (response.ContentRange) headers.set('Content-Range', response.ContentRange);
+          headers.set('Accept-Ranges', 'bytes');
+
           const cacheControl = cleanKey.includes('/photos/')
             ? 'public, max-age=31536000, immutable'
             : 'public, max-age=3600, stale-while-revalidate=86400';
           headers.set('Cache-Control', cacheControl);
           headers.set('Access-Control-Allow-Origin', '*');
+          headers.set('Access-Control-Allow-Headers', 'Range, Content-Type');
+          headers.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+
+          const status = response.$metadata.httpStatusCode || (response.ContentRange ? 206 : 200);
 
           return new NextResponse(stream as any, {
-            status: 200,
+            status,
             headers,
           });
         }
@@ -58,14 +81,46 @@ export async function GET(
       const { data: blob, error } = await supabaseAdmin.storage.from(bucket).download(cleanKey);
       if (!error && blob) {
         const headers = new Headers();
-        if (blob.type) headers.set('Content-Type', blob.type);
+        const contentType =
+          blob.type ||
+          (cleanKey.endsWith('.m4a')
+            ? 'audio/mp4'
+            : cleanKey.endsWith('.webm')
+            ? 'audio/webm'
+            : 'application/octet-stream');
+        headers.set('Content-Type', contentType);
+        headers.set('Accept-Ranges', 'bytes');
+        headers.set('Access-Control-Allow-Origin', '*');
+        headers.set('Access-Control-Allow-Headers', 'Range, Content-Type');
+        headers.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+
         const cacheControl = cleanKey.includes('/photos/')
           ? 'public, max-age=31536000, immutable'
           : 'public, max-age=3600, stale-while-revalidate=86400';
         headers.set('Cache-Control', cacheControl);
-        headers.set('Access-Control-Allow-Origin', '*');
 
-        return new NextResponse(blob, {
+        const arrayBuffer = await blob.arrayBuffer();
+        const totalSize = arrayBuffer.byteLength;
+
+        if (rangeHeader && rangeHeader.startsWith('bytes=')) {
+          const parts = rangeHeader.replace(/bytes=/, '').split('-');
+          const start = parseInt(parts[0], 10) || 0;
+          const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+
+          if (start < totalSize && end >= start) {
+            const chunk = arrayBuffer.slice(start, end + 1);
+            headers.set('Content-Range', `bytes ${start}-${end}/${totalSize}`);
+            headers.set('Content-Length', chunk.byteLength.toString());
+
+            return new NextResponse(chunk, {
+              status: 206,
+              headers,
+            });
+          }
+        }
+
+        headers.set('Content-Length', totalSize.toString());
+        return new NextResponse(arrayBuffer, {
           status: 200,
           headers,
         });
@@ -76,19 +131,30 @@ export async function GET(
 
     // 3. Fallback to production storage endpoint (supports local development when R2 is only on prod)
     try {
-      const prodRes = await fetch(`https://virtual-photobooth-taupe.vercel.app/api/storage/${cleanKey}`);
-      if (prodRes.ok && prodRes.body) {
+      const fetchHeaders: HeadersInit = rangeHeader ? { Range: rangeHeader } : {};
+      const prodRes = await fetch(`https://virtual-photobooth-taupe.vercel.app/api/storage/${cleanKey}`, {
+        headers: fetchHeaders,
+      });
+      if (prodRes.ok || prodRes.status === 206) {
         const headers = new Headers();
         const contentType = prodRes.headers.get('Content-Type');
         if (contentType) headers.set('Content-Type', contentType);
+        const contentLength = prodRes.headers.get('Content-Length');
+        if (contentLength) headers.set('Content-Length', contentLength);
+        const contentRange = prodRes.headers.get('Content-Range');
+        if (contentRange) headers.set('Content-Range', contentRange);
+        headers.set('Accept-Ranges', 'bytes');
+        headers.set('Access-Control-Allow-Origin', '*');
+        headers.set('Access-Control-Allow-Headers', 'Range, Content-Type');
+        headers.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+
         const cacheControl = cleanKey.includes('/photos/')
           ? 'public, max-age=31536000, immutable'
           : 'public, max-age=3600, stale-while-revalidate=86400';
         headers.set('Cache-Control', cacheControl);
-        headers.set('Access-Control-Allow-Origin', '*');
 
         return new NextResponse(prodRes.body as any, {
-          status: 200,
+          status: prodRes.status,
           headers,
         });
       }

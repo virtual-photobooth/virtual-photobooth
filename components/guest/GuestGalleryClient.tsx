@@ -150,7 +150,7 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
     setAudioError(false);
     setIsPlaying(false);
     setCurrentTime(0);
-    setAudioDuration(0);
+    setAudioDuration(selectedItem?.durationSeconds || 0);
 
     if (audioRef.current) {
       try {
@@ -207,7 +207,15 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
   }, [selectedItem]);
 
   const togglePlayAudio = () => {
-    if (!audioRef.current || audioError) return;
+    if (!audioRef.current) {
+      if (selectedItem?.voiceUrl) {
+        const audio = new Audio();
+        audio.src = selectedItem.voiceUrl;
+        audioRef.current = audio;
+      } else {
+        return;
+      }
+    }
 
     if (isPlaying) {
       try {
@@ -219,13 +227,12 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
     } else {
       audioRef.current
         .play()
-        .then(() => setIsPlaying(true))
+        .then(() => {
+          setIsPlaying(true);
+          setAudioError(false);
+        })
         .catch((e: any) => {
           setIsPlaying(false);
-          // Gracefully handle playback issues without popping Next.js dev error overlay
-          if (e?.name === 'NotSupportedError' || e?.name === 'NotAllowedError') {
-            setAudioError(true);
-          }
           console.warn('Audio playback handled gracefully:', e?.message || e);
         });
     }
@@ -511,7 +518,7 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
 
             {/* Bottom Audio Player Pill Widget (Sesuai Photobooth Theme - Outside Artwork) */}
             <div className="w-full space-y-3 z-10">
-              {selectedItem.voiceUrl && !audioError ? (
+              {selectedItem.voiceUrl ? (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-2">
                     <div className="flex items-center gap-1.5 text-[#D4A373]">
@@ -603,7 +610,7 @@ export default function GuestGalleryClient({ params }: { params: Promise<{ slug:
               )}
 
               {/* Download Action Buttons */}
-              {selectedItem.voiceUrl && !audioError ? (
+              {selectedItem.voiceUrl ? (
                 <div className="w-full space-y-2 pt-1">
                   {/* Primary: Download Video MP4 + Voice Note */}
                   <button
